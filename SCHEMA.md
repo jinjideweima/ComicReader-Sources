@@ -10,8 +10,19 @@
 - non-empty `allowedHosts` using exact hosts or `*.example.com` patterns;
 - explicit `network` permission and any persistent-preference use;
 - `everyone`, `teen`, `mature`, or `adult` content rating;
-- optional Ed25519 signature over `id + NUL + version + NUL + sha256`.
+- optional declarative `authentication` configuration. Account-capable sources
+  must request `accountAuthentication` and, when applicable, `accountCookies`;
+- optional `resources` entries with a safe `id`, repository-relative `url`,
+  SHA-256, resource-specific license, and optional attribution notice;
+- Ed25519 v2 signature over deterministic sorted-key JSON of the complete
+  manifest (excluding the signature itself), prefixed with
+  `ComicReader.SourceManifest.ed25519-v2 + NUL`.
 
-The initial repository signs every entry. ComicReader pins the signing key of
-an installed signed source across updates.
+The repository signs every entry. ComicReader pins the signing key of an
+installed source across updates. Tokens and cookies are owned by the native app,
+stored in a per-source ThisDeviceOnly Keychain record, and never exposed to the
+source JavaScript storage bridge.
 
+Resources are downloaded only from the same repository origin as `index.json`,
+verified before installation, treated as non-executable data, and never exposed
+through the JavaScript runtime.

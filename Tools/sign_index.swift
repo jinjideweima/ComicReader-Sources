@@ -24,7 +24,7 @@ else {
 
 for position in sources.indices {
     guard let id = sources[position]["id"] as? String,
-          let version = sources[position]["version"] as? String,
+          sources[position]["version"] is String,
           let relativePath = sources[position]["scriptURL"] as? String
     else {
         fputs("A source is missing id, version, or scriptURL\n", stderr)
@@ -39,12 +39,34 @@ for position in sources.indices {
 
     let scriptData = try Data(contentsOf: sourceURL)
     let digest = SHA256.hash(data: scriptData).map { String(format: "%02x", $0) }.joined()
-    let message = Data("\(id)\u{0}\(version)\u{0}\(digest)".utf8)
+    sources[position]["sha256"] = digest
+    if var resources = sources[position]["resources"] as? [[String: Any]] {
+        for resourcePosition in resources.indices {
+            guard let resourcePath = resources[resourcePosition]["url"] as? String else {
+                fputs("A resource for \(id) is missing its URL\n", stderr)
+                exit(1)
+            }
+            let resourceURL = root.appendingPathComponent(resourcePath).standardizedFileURL
+            guard resourceURL.path.hasPrefix(root.path + "/"), fileManager.fileExists(atPath: resourceURL.path) else {
+                fputs("Unsafe or missing resource URL for \(id)\n", stderr)
+                exit(1)
+            }
+            let bytes = try Data(contentsOf: resourceURL)
+            resources[resourcePosition]["sha256"] = SHA256.hash(data: bytes)
+                .map { String(format: "%02x", $0) }.joined()
+        }
+        sources[position]["resources"] = resources
+    }
+    sources[position].removeValue(forKey: "signature")
+    let canonicalManifest = try JSONSerialization.data(
+        withJSONObject: sources[position],
+        options: [.sortedKeys, .withoutEscapingSlashes]
+    )
+    let message = Data("ComicReader.SourceManifest.ed25519-v2\u{0}".utf8) + canonicalManifest
     let signature = try privateKey.signature(for: message)
 
-    sources[position]["sha256"] = digest
     sources[position]["signature"] = [
-        "algorithm": "ed25519",
+        "algorithm": "ed25519-v2",
         "publicKey": privateKey.publicKey.rawRepresentation.base64EncodedString(),
         "value": signature.base64EncodedString(),
     ]
@@ -57,4 +79,3 @@ let output = try JSONSerialization.data(
 )
 try (output + Data("\n".utf8)).write(to: indexURL, options: .atomic)
 print("Signed \(sources.count) source entries in \(indexURL.path)")
-

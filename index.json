@@ -14,6 +14,39 @@
         "www.webmota.com",
         "cn.webmota.com"
       ],
+      "authentication" : {
+        "cookieCapture" : {
+          "domains" : [
+            "*.baozimh.com"
+          ],
+          "names" : [
+            "bs0"
+          ],
+          "requiredNames" : [
+            "TSID"
+          ]
+        },
+        "formLogin" : {
+          "encoding" : "multipartFormData",
+          "headers" : {
+            "Referer" : "https://www.baozimh.com/user/signin",
+            "User-Agent" : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
+          },
+          "passwordField" : "password",
+          "successJSONPath" : "result",
+          "tokenJSONPath" : "data",
+          "url" : "https://www.baozimh.com/api/bui/signin",
+          "usernameField" : "username"
+        },
+        "tokenAttachment" : {
+          "hosts" : [
+            "www.baozimh.com"
+          ],
+          "kind" : "cookie",
+          "name" : "TSID",
+          "pathPrefix" : "/"
+        }
+      },
       "contentRating" : "mature",
       "fallbackBaseURL" : "https://www.twmanga.com",
       "id" : "baozi",
@@ -26,25 +59,82 @@
       "name" : "Baozi",
       "permissions" : [
         "network",
-        "persistentPreferences"
+        "persistentPreferences",
+        "accountAuthentication",
+        "accountCookies"
+      ],
+      "preferences" : [
+        {
+          "defaultValue" : "tw",
+          "description" : "用于目录、搜索和阅读线路。",
+          "key" : "language",
+          "options" : [
+            {
+              "fallbackBaseURL" : "https://www.twmanga.com",
+              "imageReferer" : "https://www.twmanga.com/",
+              "title" : "繁體中文",
+              "value" : "tw"
+            },
+            {
+              "fallbackBaseURL" : "https://cn.twmanga.com",
+              "imageReferer" : "https://cn.twmanga.com/",
+              "title" : "简体中文",
+              "value" : "cn"
+            }
+          ],
+          "title" : "内容语言"
+        }
       ],
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/baozi/source.js",
       "sha256" : "ecbde6ebe9565c018eefa44fb11c7a0e5dc02bcf6142f767868a04038b7b7af9",
       "signature" : {
-        "algorithm" : "ed25519",
+        "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "bHe7MMGewf3e7v5uerFv+P5Qsz9qMoP5085f6drGWWw20ENbeuANLSwBd0TIS2igu2U9I3vIP2MvbMtQduAmBg=="
+        "value" : "tNhuQDsZhRLelFBGcbO7rE2Xj2F+yiptCDke5uYQ9uDEUa22RFp9K/CPm/J5mXBlzP669Iet8syvBMoJ+hycDw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
-      "version" : "1.0.0"
+      "version" : "1.1.0"
     },
     {
       "allowedHosts" : [
         "*.mangacopy.com",
         "*.mangafuna.xyz"
       ],
+      "authentication" : {
+        "formLogin" : {
+          "encoding" : "urlEncoded",
+          "headers" : {
+            "Accept" : "application/json",
+            "platform" : "1",
+            "region" : "1",
+            "User-Agent" : "COPY/3.0.0",
+            "version" : "2025.08.15",
+            "webp" : "1"
+          },
+          "passwordField" : "password",
+          "passwordTransform" : {
+            "kind" : "base64WithSuffix",
+            "suffix" : "-1729"
+          },
+          "staticFields" : {
+            "salt" : "1729"
+          },
+          "tokenJSONPath" : "results.token",
+          "url" : "https://api.mangacopy.com/api/v3/login",
+          "usernameField" : "username"
+        },
+        "tokenAttachment" : {
+          "hosts" : [
+            "api.mangacopy.com"
+          ],
+          "kind" : "header",
+          "name" : "authorization",
+          "pathPrefix" : "/api/",
+          "prefix" : "Token "
+        }
+      },
       "contentRating" : "mature",
       "fallbackBaseURL" : "https://www.mangacopy.com",
       "id" : "copymanga",
@@ -57,27 +147,64 @@
       "name" : "CopyManga",
       "permissions" : [
         "network",
-        "persistentPreferences"
+        "persistentPreferences",
+        "accountAuthentication"
       ],
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/copymanga/source.js",
-      "sha256" : "b676fde0fbebb466dee28c1dc665116ce14d65d6e0fe7d60e5b69652b3856465",
+      "sha256" : "fed6ae830e110ff869aee27d430c357d7015138189ff82b3536526e4204bc355",
       "signature" : {
-        "algorithm" : "ed25519",
+        "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "TcUVYSHMt5aG2MiVJ0mPjnpREf2TM66sCE2/NqrcYHdo9hJoKk8h9/ysEBMbMYm9MLYGInlVXkQ0xFhZwSEtDA=="
+        "value" : "xTMdhBwW8m5Zv+FIlRQUZO5gPiMpo6RoboXfiHOfK0Pb//O1q0KWr86zjIJwxHDICbRIC61MsNAUlyeW0xQBDg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
-      "version" : "1.0.0"
+      "version" : "1.1.0"
     },
     {
       "allowedHosts" : [
         "e-hentai.org",
+        "forums.e-hentai.org",
         "exhentai.org",
         "*.ehgt.org",
         "*.hath.network"
       ],
+      "authentication" : {
+        "cookieCapture" : {
+          "domains" : [
+            "e-hentai.org",
+            "exhentai.org"
+          ],
+          "names" : [
+            "igneous",
+            "ipb_member_id",
+            "ipb_pass_hash",
+            "uconfig"
+          ],
+          "requiredNames" : [
+            "ipb_member_id",
+            "ipb_pass_hash"
+          ]
+        },
+        "manualCookieNames" : [
+          "ipb_member_id",
+          "ipb_pass_hash",
+          "igneous"
+        ],
+        "staticCookies" : [
+          {
+            "domains" : [
+              "e-hentai.org",
+              "exhentai.org"
+            ],
+            "name" : "nw",
+            "path" : "/",
+            "value" : "1"
+          }
+        ],
+        "webLoginURL" : "https://forums.e-hentai.org/index.php?act=Login&CODE=01"
+      },
       "contentRating" : "adult",
       "fallbackBaseURL" : "https://e-hentai.org",
       "id" : "ehentai",
@@ -90,19 +217,60 @@
       "name" : "E-Hentai",
       "permissions" : [
         "network",
-        "persistentPreferences"
+        "persistentPreferences",
+        "accountAuthentication",
+        "accountCookies"
+      ],
+      "preferences" : [
+        {
+          "defaultValue" : "",
+          "description" : "里站需要完整的 E-Hentai 登录 Cookie。退出登录时会自动回到外站。",
+          "key" : "host",
+          "options" : [
+            {
+              "fallbackBaseURL" : "https://e-hentai.org",
+              "imageReferer" : "https://e-hentai.org/",
+              "title" : "E-Hentai 外站",
+              "value" : ""
+            },
+            {
+              "fallbackBaseURL" : "https://exhentai.org",
+              "imageReferer" : "https://exhentai.org/",
+              "title" : "ExHentai 里站",
+              "value" : "ex"
+            }
+          ],
+          "requiresAccount" : true,
+          "title" : "访问站点"
+        }
       ],
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "resources" : [
+        {
+          "id" : "tag-names.zh-CN.json",
+          "license" : "CC-BY-NC-SA-3.0-CN",
+          "notice" : "EhTagTranslation Database snapshot; see sources/ehentai/resources/NOTICE.txt",
+          "sha256" : "3ae2d166e676af64bed1fcbea8180f5ab1821d13a3714f2883c3c715f51caaf1",
+          "url" : "sources/ehentai/resources/tag-names.zh-CN.json"
+        },
+        {
+          "id" : "tag-definitions.zh-CN.json",
+          "license" : "CC-BY-NC-SA-3.0-CN",
+          "notice" : "EhTagTranslation Database snapshot; see sources/ehentai/resources/NOTICE.txt",
+          "sha256" : "72a379e3bdf016037db931252d89b44cfc57e7b6af718f839c223717bd08e6ba",
+          "url" : "sources/ehentai/resources/tag-definitions.zh-CN.json"
+        }
+      ],
       "scriptURL" : "sources/ehentai/source.js",
       "sha256" : "0665a5ce79b3da58aa89af3967fab6e79d27e7ef0ed56c028c02c030a3017053",
       "signature" : {
-        "algorithm" : "ed25519",
+        "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "U5+YCzkw6abM+IKzmMoIlM8JuT+fY43ld3RJQe2E2oJGP19a49oOqL7pk+5oCUYtO5B0Y5Ln7iAjC9baKu19DQ=="
+        "value" : "1+iOGA3PCHQJVyO1itmqN4If5iH1Wlzhlq+lz7UK62tOKsWdWEZw2XDNJd8NuQCAK0/vZsT+ICn2FvLP16XzBA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
-      "version" : "1.0.0"
+      "version" : "1.1.0"
     },
     {
       "allowedHosts" : [
@@ -110,6 +278,26 @@
         "*.xmanhua.com",
         "*.yymanhua.com"
       ],
+      "authentication" : {
+        "cookieCapture" : {
+          "domains" : [
+            "*.mangabz.com"
+          ],
+          "excludedNamePrefixes" : [
+            "__cf",
+            "cf_"
+          ],
+          "excludedNames" : [
+            "mangabz_lang",
+            "mangabz_search",
+            "mangabz_machinekey",
+            "ngserverid",
+            "comichistory",
+            "comichistoryitem"
+          ]
+        },
+        "webLoginURL" : "https://www.mangabz.com/login/"
+      },
       "contentRating" : "mature",
       "fallbackBaseURL" : "https://www.mangabz.com",
       "id" : "mangabz",
@@ -122,19 +310,65 @@
       "name" : "MangaBZ",
       "permissions" : [
         "network",
-        "persistentPreferences"
+        "persistentPreferences",
+        "accountAuthentication",
+        "accountCookies"
+      ],
+      "preferences" : [
+        {
+          "defaultValue" : "1",
+          "description" : "同时影响目录与阅读内容。",
+          "key" : "language",
+          "options" : [
+            {
+              "title" : "繁體中文",
+              "value" : "1"
+            },
+            {
+              "title" : "简体中文",
+              "value" : "2"
+            }
+          ],
+          "title" : "内容语言"
+        },
+        {
+          "defaultValue" : "auto",
+          "description" : "自动模式会在站点不可用时切换到备用线路。",
+          "key" : "mirror_preference",
+          "options" : [
+            {
+              "fallbackBaseURL" : "https://www.mangabz.com",
+              "imageReferer" : "https://www.mangabz.com/",
+              "title" : "自动选择",
+              "value" : "auto"
+            },
+            {
+              "fallbackBaseURL" : "https://www.mangabz.com",
+              "imageReferer" : "https://www.mangabz.com/",
+              "title" : "MangaBZ 主站",
+              "value" : "main"
+            },
+            {
+              "fallbackBaseURL" : "https://www.yymanhua.com",
+              "imageReferer" : "https://www.yymanhua.com/",
+              "title" : "YY 漫画备用站",
+              "value" : "yy"
+            }
+          ],
+          "title" : "访问线路"
+        }
       ],
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/mangabz/source.js",
       "sha256" : "96d8096fafd33456deca51f2f88da361bbdce861f0561908d4a93c0ed2a5915c",
       "signature" : {
-        "algorithm" : "ed25519",
+        "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "va49fH554XzTQkxFMrE7AcmbRbIjXsg2rniwSBMAQkkPssIsiy1U02GQwImmrMEP/AjEQ9N9ncq1nVZDD00MCA=="
+        "value" : "E1bspKeTCNbej7aQU5L34KG/2GnCG3Vga6KWSr6l371g2Oes1eClv+gqF15np5N+6VTE4KOcCN7eDfEhTyHIBw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
-      "version" : "1.0.0"
+      "version" : "1.1.0"
     }
   ]
 }

@@ -100,14 +100,39 @@ do {
             try require(headers.keys.allSatisfy { !prohibited.contains($0.lowercased()) }, "Credential header in \(id)")
         }
 
-        try require(signature["algorithm"]?.lowercased() == "ed25519", "Invalid signature algorithm for \(id)")
+        if source["authentication"] != nil {
+            try require(permissions.contains("accountAuthentication"), "Missing accountAuthentication permission for \(id)")
+        }
+
+        for resource in source["resources"] as? [[String: Any]] ?? [] {
+            guard let resourceID = resource["id"] as? String,
+                  let resourcePath = resource["url"] as? String,
+                  let resourceDigest = resource["sha256"] as? String,
+                  let resourceLicense = resource["license"] as? String else {
+                throw ValidationError.message("Invalid resource metadata for \(id)")
+            }
+            try require(!resourceID.isEmpty && !resourceLicense.isEmpty, "Empty resource metadata for \(id)")
+            let resourceURL = root.appendingPathComponent(resourcePath).standardizedFileURL
+            try require(resourceURL.path.hasPrefix(root.path + "/"), "Unsafe resource path for \(id)")
+            let bytes = try Data(contentsOf: resourceURL)
+            let actualResourceDigest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+            try require(actualResourceDigest == resourceDigest, "Resource SHA-256 mismatch for \(id): \(resourceID)")
+        }
+
+        try require(signature["algorithm"]?.lowercased() == "ed25519-v2", "Invalid signature algorithm for \(id)")
         try require(signature["publicKey"] == expectedPublicKey, "Unexpected signing key for \(id)")
         guard let signatureValue = signature["value"],
               let keyData = Data(base64Encoded: expectedPublicKey),
               let signatureData = Data(base64Encoded: signatureValue),
               let key = try? Curve25519.Signing.PublicKey(rawRepresentation: keyData)
         else { throw ValidationError.message("Invalid signature encoding for \(id)") }
-        let message = Data("\(id)\u{0}\(version)\u{0}\(digest)".utf8)
+        var unsigned = source
+        unsigned.removeValue(forKey: "signature")
+        let canonicalManifest = try JSONSerialization.data(
+            withJSONObject: unsigned,
+            options: [.sortedKeys, .withoutEscapingSlashes]
+        )
+        let message = Data("ComicReader.SourceManifest.ed25519-v2\u{0}".utf8) + canonicalManifest
         try require(key.isValidSignature(signatureData, for: message), "Invalid signature for \(id)")
     }
 

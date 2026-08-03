@@ -57,8 +57,10 @@
   }
 
   function authHeaders() {
-    var token = storage.get('token');
-    return token ? { 'authorization': 'Token ' + token } : null;
+    // ComicReader's native bridge attaches the Keychain token only to the
+    // signed manifest's API host/path. JavaScript receives only this non-secret
+    // login-state bit and never receives the token value.
+    return storage.get('account_logged_in') === '1' ? {} : null;
   }
 
   function parseEnvelope(response) {
@@ -492,6 +494,36 @@
         if (raw.last_chapter_name) manga.info.cloudChapter = raw.last_chapter_name;
         return manga;
       });
+    },
+
+    // Account profile is fetched on demand and returned only to the native
+    // account screen. It is never persisted by the plugin. The native bridge
+    // adds the Keychain token after JavaScript has constructed the request.
+    getAccountOverview: function () {
+      var profile = apiGet('/api/v3/member/info?platform=1', requireAuth()) || {};
+      function text(value) {
+        return value === null || value === undefined || value === '' ? null : String(value);
+      }
+      function metric(id, title, value) {
+        value = text(value);
+        return value === null ? null : { id: id, title: title, value: value };
+      }
+      var identity = [
+        metric('nickname', '昵称', profile.nickname),
+        metric('username', '用户名', profile.username),
+        metric('created', '注册时间', profile.datetime_created)
+      ].filter(Boolean);
+      var quota = [
+        metric('ticket', '月票', profile.ticket),
+        metric('reward_ticket', '奖励月票', profile.reward_ticket),
+        metric('downloads', '下载额度', profile.downloads),
+        metric('vip_downloads', 'VIP 下载额度', profile.vip_downloads),
+        metric('reward_downloads', '奖励下载额度', profile.reward_downloads)
+      ].filter(Boolean);
+      var sections = [];
+      if (identity.length) sections.push({ id: 'identity', title: '账户', metrics: identity });
+      if (quota.length) sections.push({ id: 'quota', title: '权益与额度', metrics: quota });
+      return { isSupported: true, sections: sections, message: sections.length ? null : '账户没有返回可展示的资料' };
     },
 
     search: function (page, query, filters) {

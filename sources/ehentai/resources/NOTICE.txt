@@ -1,0 +1,11 @@
+EhTagTranslation Database snapshot
+
+Source: https://github.com/EhTagTranslation/Database
+Snapshot version: 7
+License: Creative Commons Attribution-NonCommercial-ShareAlike 3.0 China Mainland
+License URL: https://creativecommons.org/licenses/by-nc-sa/3.0/cn/
+
+ComicReader generates ehtags.definitions.json from the upstream Markdown database.
+The generated snapshot removes example-image markup, external links, and formatting while
+retaining the Chinese definition text. Individual upstream entries may carry additional
+notices documented in the source repository.
