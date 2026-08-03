@@ -1,0 +1,26 @@
+name: Validate source repository
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate metadata, hashes, hosts, and signatures
+        run: swift Tools/validate_repository.swift
+      - name: Install secret scanner
+        run: brew install gitleaks
+      - name: Scan complete history
+        run: gitleaks git --redact=100 --verbose .
+

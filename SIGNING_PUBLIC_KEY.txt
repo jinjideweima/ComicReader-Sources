@@ -1,0 +1,10 @@
+Ed25519 public key (raw 32 bytes, Base64):
+
+8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=
+
+SHA-256 fingerprint of the raw public key:
+
+e2efa0d372dec8419a15855d55f968ccc4c805c38742fb185c1df6cf00ecec95
+
+The fingerprint is also calculated by `Tools/validate_repository.swift`.
+

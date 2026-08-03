@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Published SHA-256 fingerprint of the repository signing public key"
+regexTarget = "match"
+regexes = ['''e2efa0d372dec8419a15855d55f968ccc4c805c38742fb185c1df6cf00ecec95''']
+

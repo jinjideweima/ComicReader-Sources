@@ -1,0 +1,140 @@
+{
+  "name" : "ComicReader Sources",
+  "sources" : [
+    {
+      "allowedHosts" : [
+        "*.baozimh.com",
+        "*.bzcdn.net",
+        "www.dinnerku.com",
+        "cn.dinnerku.com",
+        "www.kukuc.co",
+        "cn.kukuc.co",
+        "www.twmanga.com",
+        "cn.twmanga.com",
+        "www.webmota.com",
+        "cn.webmota.com"
+      ],
+      "contentRating" : "mature",
+      "fallbackBaseURL" : "https://www.twmanga.com",
+      "id" : "baozi",
+      "imageRequestHeaders" : {
+        "Referer" : "https://www.twmanga.com/",
+        "User-Agent" : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      },
+      "language" : "zh",
+      "license" : "Apache-2.0",
+      "name" : "Baozi",
+      "permissions" : [
+        "network",
+        "persistentPreferences"
+      ],
+      "publisher" : "ComicReader Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "scriptURL" : "sources/baozi/source.js",
+      "sha256" : "ecbde6ebe9565c018eefa44fb11c7a0e5dc02bcf6142f767868a04038b7b7af9",
+      "signature" : {
+        "algorithm" : "ed25519",
+        "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
+        "value" : "bHe7MMGewf3e7v5uerFv+P5Qsz9qMoP5085f6drGWWw20ENbeuANLSwBd0TIS2igu2U9I3vIP2MvbMtQduAmBg=="
+      },
+      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
+      "version" : "1.0.0"
+    },
+    {
+      "allowedHosts" : [
+        "*.mangacopy.com",
+        "*.mangafuna.xyz"
+      ],
+      "contentRating" : "mature",
+      "fallbackBaseURL" : "https://www.mangacopy.com",
+      "id" : "copymanga",
+      "imageRequestHeaders" : {
+        "Referer" : "https://www.mangacopy.com/",
+        "User-Agent" : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      },
+      "language" : "zh",
+      "license" : "Apache-2.0",
+      "name" : "CopyManga",
+      "permissions" : [
+        "network",
+        "persistentPreferences"
+      ],
+      "publisher" : "ComicReader Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "scriptURL" : "sources/copymanga/source.js",
+      "sha256" : "b676fde0fbebb466dee28c1dc665116ce14d65d6e0fe7d60e5b69652b3856465",
+      "signature" : {
+        "algorithm" : "ed25519",
+        "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
+        "value" : "TcUVYSHMt5aG2MiVJ0mPjnpREf2TM66sCE2/NqrcYHdo9hJoKk8h9/ysEBMbMYm9MLYGInlVXkQ0xFhZwSEtDA=="
+      },
+      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
+      "version" : "1.0.0"
+    },
+    {
+      "allowedHosts" : [
+        "e-hentai.org",
+        "exhentai.org",
+        "*.ehgt.org",
+        "*.hath.network"
+      ],
+      "contentRating" : "adult",
+      "fallbackBaseURL" : "https://e-hentai.org",
+      "id" : "ehentai",
+      "imageRequestHeaders" : {
+        "Referer" : "https://e-hentai.org/",
+        "User-Agent" : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      },
+      "language" : "en",
+      "license" : "Apache-2.0",
+      "name" : "E-Hentai",
+      "permissions" : [
+        "network",
+        "persistentPreferences"
+      ],
+      "publisher" : "ComicReader Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "scriptURL" : "sources/ehentai/source.js",
+      "sha256" : "0665a5ce79b3da58aa89af3967fab6e79d27e7ef0ed56c028c02c030a3017053",
+      "signature" : {
+        "algorithm" : "ed25519",
+        "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
+        "value" : "U5+YCzkw6abM+IKzmMoIlM8JuT+fY43ld3RJQe2E2oJGP19a49oOqL7pk+5oCUYtO5B0Y5Ln7iAjC9baKu19DQ=="
+      },
+      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
+      "version" : "1.0.0"
+    },
+    {
+      "allowedHosts" : [
+        "*.mangabz.com",
+        "*.xmanhua.com",
+        "*.yymanhua.com"
+      ],
+      "contentRating" : "mature",
+      "fallbackBaseURL" : "https://www.mangabz.com",
+      "id" : "mangabz",
+      "imageRequestHeaders" : {
+        "Referer" : "https://www.mangabz.com/",
+        "User-Agent" : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      },
+      "language" : "zh",
+      "license" : "Apache-2.0",
+      "name" : "MangaBZ",
+      "permissions" : [
+        "network",
+        "persistentPreferences"
+      ],
+      "publisher" : "ComicReader Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "scriptURL" : "sources/mangabz/source.js",
+      "sha256" : "96d8096fafd33456deca51f2f88da361bbdce861f0561908d4a93c0ed2a5915c",
+      "signature" : {
+        "algorithm" : "ed25519",
+        "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
+        "value" : "va49fH554XzTQkxFMrE7AcmbRbIjXsg2rniwSBMAQkkPssIsiy1U02GQwImmrMEP/AjEQ9N9ncq1nVZDD00MCA=="
+      },
+      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
+      "version" : "1.0.0"
+    }
+  ]
+}
