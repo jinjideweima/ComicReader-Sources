@@ -803,6 +803,32 @@
       return { items: items, hasNextPage: false };
     },
 
+    // Read only when the native account screen asks for it. The response is
+    // reduced to anonymous status/count metrics and is never persisted.
+    getAccountOverview: function () {
+      var shelf = accountShelf();
+      return {
+        isSupported: true,
+        sections: [
+          {
+            id: 'account',
+            title: '账户',
+            metrics: [
+              { id: 'status', title: '登录状态', value: '已登录' }
+            ]
+          },
+          {
+            id: 'bookshelf',
+            title: '书架',
+            metrics: [
+              { id: 'bookshelf_count', title: '收藏漫画', value: String(shelf.items.length) }
+            ]
+          }
+        ],
+        message: null
+      };
+    },
+
     getFavoriteState: function (manga) {
       return favoriteResult(
         shelfContains(accountShelf().items, manga),

@@ -964,6 +964,44 @@
       return parseAccountList(result.response.body, result.mirror, 'history');
     },
 
+    // MangaBZ does not expose a stable profile API. Provide a useful on-demand
+    // account overview from its two authenticated account pages instead.
+    getAccountOverview: function () {
+      var favoritesResponse = requestAccountPath('/bookmarker/', 'GET', null, '/');
+      var historyResponse = requestAccountPath('/comichistory/', 'GET', null, '/');
+      var favorites = parseAccountList(
+        favoritesResponse.response.body,
+        favoritesResponse.mirror,
+        'favorites'
+      );
+      var history = parseAccountList(
+        historyResponse.response.body,
+        historyResponse.mirror,
+        'history'
+      );
+      return {
+        isSupported: true,
+        sections: [
+          {
+            id: 'account',
+            title: '账户',
+            metrics: [
+              { id: 'status', title: '登录状态', value: '已登录' }
+            ]
+          },
+          {
+            id: 'library',
+            title: '云端书架',
+            metrics: [
+              { id: 'favorites_count', title: '本页收藏', value: String(favorites.items.length) },
+              { id: 'history_count', title: '本页阅读记录', value: String(history.items.length) }
+            ]
+          }
+        ],
+        message: null
+      };
+    },
+
     deleteAccountShelfItems: function (mangas, kind) {
       return deleteAccountShelfItems(mangas, kind);
     },

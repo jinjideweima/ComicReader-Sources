@@ -88,14 +88,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/baozi/source.js",
-      "sha256" : "ecbde6ebe9565c018eefa44fb11c7a0e5dc02bcf6142f767868a04038b7b7af9",
+      "sha256" : "021b3357b1e333d60afc3f866e249c09910c49d8bb23ff9cca64f2b5052754fb",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "zpYtNcDp1391NPT8AoCRxhVCv1BSWykuxO+eVGntTyVq3gG4JNqm0C7ILQDG5nA9cuT4+8FYSW3WycIcqTyOCA=="
+        "value" : "P/2/EfK685A/Wu9KGWWWBxcI4OqHZ0Wv6RIO3Ou2egeQCfOOqB5hvV7WB0VZqjq/e71RjHlIHtGoDBlRKcLdAQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
-      "version" : "1.1.1"
+      "version" : "1.1.2"
     },
     {
       "allowedHosts" : [
@@ -157,7 +157,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "nPKlxtx04JVBXuWj09z102cR1XGwtdrAaQb8KlBraEUVicR6t024yUg7JANNoTPmEOvGcrIA3n3WzwNQ10NdAA=="
+        "value" : "0di6h2ExFM5wxkIOZmRS6GKycbUP9stlNu1DoJO1CCwtRPhZ9Z5QpmpawVds6F8+zlmoQVevuKdxptFni3sMAQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.1"
@@ -271,7 +271,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "PPDThV8zbj+/UL4kYLJ3TjinNV7kL+GEQf3ZEUdreuJZ/wohiEJMlziInKlt77IkvDBDOtCqT0yD8rzc6i0+DA=="
+        "value" : "ZTxSMoYwPTBhFoRZLm9cOx+XDRCUUDuxuqyHgbXy0SqmJofSJQptHbRX7Xf+4jhJNyToSbsA/m4iWN0RnVhaAQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.1.1"
@@ -365,14 +365,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/mangabz/source.js",
-      "sha256" : "96d8096fafd33456deca51f2f88da361bbdce861f0561908d4a93c0ed2a5915c",
+      "sha256" : "29b9f915ea1f75a1657e8233febfd64d4de11f3cf39f8b2aafded84c22a0414b",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "XjF2h1mUoZAwDd8LxRiBHHaU+DyX6OzC7pepFYaJDcY0WtvJsDbO7fVWWyW5lnjCx2gP2XGLnM5H4BHS5l25Dg=="
+        "value" : "2EPRzYpYVoAxOVT1Dkx6ZCFag0Xx85eLYnRSi05eZnMCYkdPS4EHgrtJX/+I4Teyud1ZUYAQ4uFYuP/qdleEDQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
-      "version" : "1.1.0"
+      "version" : "1.1.1"
     }
   ]
 }
