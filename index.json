@@ -56,7 +56,7 @@
       },
       "language" : "zh",
       "license" : "Apache-2.0",
-      "name" : "Baozi",
+      "name" : "包子漫画",
       "permissions" : [
         "network",
         "persistentPreferences",
@@ -92,10 +92,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "tNhuQDsZhRLelFBGcbO7rE2Xj2F+yiptCDke5uYQ9uDEUa22RFp9K/CPm/J5mXBlzP669Iet8syvBMoJ+hycDw=="
+        "value" : "zpYtNcDp1391NPT8AoCRxhVCv1BSWykuxO+eVGntTyVq3gG4JNqm0C7ILQDG5nA9cuT4+8FYSW3WycIcqTyOCA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
-      "version" : "1.1.0"
+      "version" : "1.1.1"
     },
     {
       "allowedHosts" : [
@@ -144,7 +144,7 @@
       },
       "language" : "zh",
       "license" : "Apache-2.0",
-      "name" : "CopyManga",
+      "name" : "拷贝漫画",
       "permissions" : [
         "network",
         "persistentPreferences",
@@ -157,10 +157,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "xTMdhBwW8m5Zv+FIlRQUZO5gPiMpo6RoboXfiHOfK0Pb//O1q0KWr86zjIJwxHDICbRIC61MsNAUlyeW0xQBDg=="
+        "value" : "nPKlxtx04JVBXuWj09z102cR1XGwtdrAaQb8KlBraEUVicR6t024yUg7JANNoTPmEOvGcrIA3n3WzwNQ10NdAA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
-      "version" : "1.1.0"
+      "version" : "1.1.1"
     },
     {
       "allowedHosts" : [
@@ -192,6 +192,7 @@
           "ipb_pass_hash",
           "igneous"
         ],
+        "persistentWebLogin" : true,
         "staticCookies" : [
           {
             "domains" : [
@@ -202,6 +203,9 @@
             "path" : "/",
             "value" : "1"
           }
+        ],
+        "webLoginHosts" : [
+          "challenges.cloudflare.com"
         ],
         "webLoginURL" : "https://forums.e-hentai.org/index.php?act=Login&CODE=01"
       },
@@ -267,10 +271,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "1+iOGA3PCHQJVyO1itmqN4If5iH1Wlzhlq+lz7UK62tOKsWdWEZw2XDNJd8NuQCAK0/vZsT+ICn2FvLP16XzBA=="
+        "value" : "PPDThV8zbj+/UL4kYLJ3TjinNV7kL+GEQf3ZEUdreuJZ/wohiEJMlziInKlt77IkvDBDOtCqT0yD8rzc6i0+DA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
-      "version" : "1.1.0"
+      "version" : "1.1.1"
     },
     {
       "allowedHosts" : [
@@ -365,7 +369,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "E1bspKeTCNbej7aQU5L34KG/2GnCG3Vga6KWSr6l371g2Oes1eClv+gqF15np5N+6VTE4KOcCN7eDfEhTyHIBw=="
+        "value" : "XjF2h1mUoZAwDd8LxRiBHHaU+DyX6OzC7pepFYaJDcY0WtvJsDbO7fVWWyW5lnjCx2gP2XGLnM5H4BHS5l25Dg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.0"

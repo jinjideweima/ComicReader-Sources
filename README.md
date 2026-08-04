@@ -37,8 +37,8 @@ plugin for review and requires a separate confirmation before installation.
 
 | Plugin | ID | Rating | Declared capabilities |
 | --- | --- | --- | --- |
-| Baozi | `baozi` | Mature | Browse/read, account or temporary shelf, add/remove shelf |
-| CopyManga | `copymanga` | Mature | Browse/read, profile-backed favorites/history, favorite mutations |
+| 包子漫画 | `baozi` | Mature | Browse/read, account or temporary shelf, add/remove shelf |
+| 拷贝漫画 | `copymanga` | Mature | Browse/read, profile-backed favorites/history, favorite mutations |
 | E-Hentai | `ehentai` | Adult | Browse/read, favorites/watched, ratings, comments, tags, archives/torrents |
 | MangaBZ | `mangabz` | Mature | Browse/read, favorites/history, shelf mutations |
 

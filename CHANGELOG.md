@@ -5,6 +5,9 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Rename Baozi and CopyManga to their Chinese display names.
+- Allow E-Hentai's publisher-isolated login session to retain Cloudflare
+  challenge state and navigate the signed challenge host.
 - Add signed declarative account manifests for all four sources.
 - Upgrade signatures to `ed25519-v2`, covering the complete security manifest.
 - Keep CopyManga tokens out of JavaScript and rely on native host/path-bound

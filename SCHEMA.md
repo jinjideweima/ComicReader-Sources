@@ -12,6 +12,8 @@
 - `everyone`, `teen`, `mature`, or `adult` content rating;
 - optional declarative `authentication` configuration. Account-capable sources
   must request `accountAuthentication` and, when applicable, `accountCookies`;
+  a web login may separately sign `webLoginHosts` for verification-page
+  navigation and `persistentWebLogin` for a publisher-isolated WebKit store;
 - optional `resources` entries with a safe `id`, repository-relative `url`,
   SHA-256, resource-specific license, and optional attribution notice;
 - Ed25519 v2 signature over deterministic sorted-key JSON of the complete

@@ -100,8 +100,19 @@ do {
             try require(headers.keys.allSatisfy { !prohibited.contains($0.lowercased()) }, "Credential header in \(id)")
         }
 
-        if source["authentication"] != nil {
+        if let authentication = source["authentication"] as? [String: Any] {
             try require(permissions.contains("accountAuthentication"), "Missing accountAuthentication permission for \(id)")
+            let webLoginHosts = authentication["webLoginHosts"] as? [String] ?? []
+            try require(
+                webLoginHosts.allSatisfy(validHostPattern),
+                "Invalid webLoginHosts for \(id)"
+            )
+            if !webLoginHosts.isEmpty || (authentication["persistentWebLogin"] as? Bool) == true {
+                try require(
+                    authentication["webLoginURL"] as? String != nil,
+                    "Web login extensions require webLoginURL for \(id)"
+                )
+            }
         }
 
         for resource in source["resources"] as? [[String: Any]] ?? [] {
