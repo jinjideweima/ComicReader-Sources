@@ -838,13 +838,17 @@
   }
 
   function htmlHeadingSection(body, english, chinese) {
-    var heading = new RegExp('<h[1-6]\\b[^>]*>[\\s\\S]*?(?:' + english + '|' + chinese + ')[\\s\\S]*?<\\/h[1-6]>', 'i');
-    var match = heading.exec(body || '');
-    if (!match) return '';
-    var start = match.index;
-    var rest = String(body || '').slice(start + match[0].length);
-    var next = /<h[1-6]\b[^>]*>/i.exec(rest);
-    return String(body || '').slice(start, start + match[0].length + (next ? next.index : rest.length));
+    var html = String(body || '');
+    var headings = /<h([1-6])\b[^>]*>[\s\S]*?<\/h\1>/gi;
+    var title = new RegExp('(?:' + english + '|' + chinese + ')', 'i');
+    var match;
+    while ((match = headings.exec(html))) {
+      var headingText = cleanSnippetText(parseHTML(match[0], site()).text() || '');
+      if (!title.test(headingText)) continue;
+      var next = headings.exec(html);
+      return html.slice(match.index, next ? next.index : html.length);
+    }
+    return '';
   }
 
   function accountFilterOptionID(name, value) {

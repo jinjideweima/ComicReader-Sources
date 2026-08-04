@@ -144,7 +144,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "cm4dXQRysqppXYFUvGyIWTbp4TqwRzn84CHQS1Ebrc8XhvduW+qI7dSWGKrGDNZsJgtHXw+GV4/Gw9R+RpflAQ=="
+        "value" : "EaF6oaNCeoe7nR8kxw1XCJN3PsXGVLpVzsVw5smJR2k3CeVyLzAuLRhbAr0gHTgtPAABxd+lwHTFdtGxKKGyBw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -268,7 +268,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "YrAkDT4P6D52/u2rD6CwQOPm4HC+IitwUN6fu7YCFTxY7GoEILKDF7hI8xsV3/YUxoLtLQsj5tDKKYQkKWoxCA=="
+        "value" : "///9r4KJhuClM9iuwQnxWg2rk44CqgHszNKTcu8T8ZhukIpz3X4lxEt2ZSeyhvtUndm6o+dkiYgJDl2RuSL6Dg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -473,14 +473,14 @@
         }
       ],
       "scriptURL" : "sources/ehentai/source.js",
-      "sha256" : "0665a5ce79b3da58aa89af3967fab6e79d27e7ef0ed56c028c02c030a3017053",
+      "sha256" : "8ca2fcc84aaadff994f7cdb77d5203b7caccdaa8580df1a9ca62e953c91c8ac8",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "b+k8FzN6JmPeSQ7IPHHUiYuHeyHBkx0w2TgoEIfKcRHa8pCXMSqNqit9C1ghqb/vyFIx5zgJZRaU8dZzhdQbBA=="
+        "value" : "E/L8/KZMpKGbqeu6wRjo8bxx2aITpoNnmepxVlEnCh1wqMTDlPrZg1AmBH6zX+lfCPd2ijz/ubZ+QmTPEEZ5Dg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
-      "version" : "1.1.2"
+      "version" : "1.1.3"
     },
     {
       "allowedHosts" : [
@@ -641,7 +641,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "02iLm25gwt2DOXHSxj61zjpzSBxvTFFAjYjRF8LnLttRyMWtWftuRXXrzas1K5xVAAGWbEgm3ceVw+08+x81Dw=="
+        "value" : "8IBcXZ6QSUh2OcWiD9gP4hMWxPoWtHeb0H3Fk3Z6FvbRJBUuQRUPmpDks6koGIoy1s1tJTuv/ajQbp/ozjRwDQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
