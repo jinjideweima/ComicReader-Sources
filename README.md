@@ -41,7 +41,7 @@ which ComicReader shows both during review and after installation.
 | --- | --- | --- | --- |
 | 包子漫画 | `baozi` | Mature | Discovery/search, temporary or account shelf, favorites, reading/downloads |
 | 拷贝漫画 | `copymanga` | Mature | Discovery/topics/rankings, search, cloud favorites/history, reading/downloads |
-| E-Hentai | `ehentai` | Adult | Advanced search, favorites/watched, ratings, comments, tags, My Settings, archives/torrents |
+| E-Hentai | `ehentai` | Adult | Advanced search, favorites/watched, ratings, comments, tags, My Settings, account tools, news/bounties, archives/torrents |
 | MangaBZ | `mangabz` | Mature | Editorial home/search/rankings, favorites/history, batch shelf management, reading/downloads |
 
 Account features require a ComicReader build that supports signed declarative

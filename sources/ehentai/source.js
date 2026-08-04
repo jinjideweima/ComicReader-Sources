@@ -1007,7 +1007,11 @@
       var value = textControlValue(form, entry.key);
       if (value == null) return;
       found = true;
-      if (!/^(?:0|off|false|no)$/i.test(String(value).trim())) mask |= entry.id;
+      // The ct_* fields are exclusion flags: 0 means the category is visible,
+      // while 1 means it is hidden.  The native API deliberately exposes an
+      // inclusion mask so the SwiftUI checkmarks and search filters share one
+      // unambiguous meaning.
+      if (/^(?:0|off|false|no)$/i.test(String(value).trim())) mask |= entry.id;
     });
     return found ? mask : null;
   }
@@ -1279,7 +1283,7 @@
       } else {
         categoryMask &= EH_ALL_CATEGORY_MASK;
         EH_CATEGORY_SETTING_KEYS.forEach(function (entry) {
-          replaceFormField(fields, entry.key, (categoryMask & entry.id) !== 0 ? '1' : '0');
+          replaceFormField(fields, entry.key, (categoryMask & entry.id) !== 0 ? '0' : '1');
         });
         expected.defaultCategoryMask = categoryMask;
       }
@@ -1382,14 +1386,33 @@
 
     var submit = form.selectFirst('input[type="submit"][name], button[type="submit"][name]');
     if (submit) addFormField(fields, submit.attr('name') || '', submit.attr('value') || submit.text() || 'Apply');
-    fetch(accountSettingsSite() + '/uconfig.php', {
+    var postResponse = fetch(accountSettingsSite() + '/uconfig.php', {
       headers: accountSettingsHeaders(true),
       method: 'POST',
       body: formEncode(fields),
       cachePolicy: 'reloadIgnoringLocalCacheData'
     });
 
+    // A successful form response often already contains the canonical values.
+    // Prefer it when it is a valid settings page, then perform a no-cache GET.
+    // If the first GET still observes the previous replica, read once more;
+    // never repeat the POST because several account fields have side effects.
+    var postState = parseAccountSettingsBody(postResponse.body || '', null);
     var after = fetchAccountSettings(null).state;
+    var initialMismatches = requestedFields.filter(function (field) {
+      return !accountSettingsValueMatches(field, expected[field], after);
+    });
+    if (initialMismatches.length && postState.isSupported) {
+      var postMatchesAll = requestedFields.every(function (field) {
+        return accountSettingsValueMatches(field, expected[field], postState);
+      });
+      if (postMatchesAll) after = postState;
+    }
+    if (requestedFields.some(function (field) {
+      return !accountSettingsValueMatches(field, expected[field], after);
+    })) {
+      after = fetchAccountSettings(null).state;
+    }
     var updated = [];
     requestedFields.forEach(function (field) {
       if (accountSettingsValueMatches(field, expected[field], after)) updated.push(field);
@@ -3152,6 +3175,274 @@
     };
   }
 
+  function readOnlyPageResponse(path) {
+    var url = accountSettingsSite() + path;
+    var res = fetch(url, {
+      headers: accountSettingsHeaders(false),
+      cachePolicy: 'reloadIgnoringLocalCacheData'
+    });
+    var body = res.body || '';
+    if (/name=["']ipb_login_submit|You must be logged|This page requires you to log on/i.test(body)) {
+      return { url: url, body: body, doc: parseHTML(body, url), loggedOut: true };
+    }
+    return { url: url, body: body, doc: parseHTML(body, url), loggedOut: false };
+  }
+
+  function safeReadOnlyLink(raw) {
+    var value = String(raw || '').trim();
+    if (value.indexOf('/') === 0) value = accountSettingsSite() + value;
+    return /^https:\/\/(?:e-hentai\.org|repo\.e-hentai\.org|forums\.e-hentai\.org)\//i.test(value)
+      ? value : null;
+  }
+
+  function genericReadOnlyTableSections(doc, prefix, maximumRows) {
+    var sections = [];
+    var rowIndex = 0;
+    doc.select('table').forEach(function (table, tableIndex) {
+      var metrics = [];
+      table.select('tr').forEach(function (row) {
+        if (rowIndex >= maximumRows) return;
+        if (row.select('input, select, textarea, button').length) return;
+        var cells = row.select('th, td');
+        if (cells.length < 2) return;
+        var values = [];
+        cells.forEach(function (cell) {
+          var value = cleanSnippetText(cell.text() || '');
+          if (value) values.push(value);
+        });
+        if (values.length < 2) return;
+        var title = values.shift();
+        var valueText = values.join(' · ');
+        if (!title || !valueText || /wallet|address|地址/i.test(title)) return;
+        metrics.push(accountMetric(prefix + '_' + tableIndex + '_' + rowIndex, title, valueText));
+        rowIndex += 1;
+      });
+      metrics = metrics.filter(function (metric) { return !!metric; });
+      if (metrics.length) sections.push({
+        id: prefix + '_table_' + tableIndex,
+        title: tableIndex === 0 ? '当前状态' : '详细信息',
+        metrics: metrics
+      });
+    });
+    return sections;
+  }
+
+  function parseAccountStatistics(body) {
+    if (!body || /name=["']ipb_login_submit|You must be logged/i.test(body)) {
+      return { isSupported: false, sections: [], message: '请先登录 E-Hentai 账号。' };
+    }
+    var text = cleanSnippetText(body);
+    var visitors = firstMatch(text, /(?:collectively\s+received|共计有|共有)[^0-9]{0,30}([0-9,]+)\s*(?:hits?|visitors?|名访客)/i);
+    var sections = [];
+    if (visitors) sections.push({
+      id: 'gallery_visitors',
+      title: '我的统计',
+      metrics: [accountMetric('gallery_visitors_period', '上一统计周期图库访客', visitors)]
+    });
+    return {
+      isSupported: sections.length > 0,
+      sections: sections,
+      message: sections.length ? null : '官网暂未返回可识别的访客统计。'
+    };
+  }
+
+  function parseHentaiAtHomeState(page) {
+    if (page.loggedOut) return { isSupported: false, title: 'Hentai@Home', sections: [], links: [], message: '请先登录 E-Hentai 账号。' };
+    var sections = genericReadOnlyTableSections(page.doc, 'hah', 40);
+    var links = [];
+    page.doc.select('a[href]').forEach(function (anchor, index) {
+      var label = cleanSnippetText(anchor.text() || '');
+      if (!/Hentai@Home\s*[0-9]|客户端下载|Download.*Client/i.test(label)) return;
+      var url = safeReadOnlyLink(anchor.attr('abs:href') || anchor.attr('href') || '');
+      if (url) links.push({ id: 'hah_download_' + index, title: label || '下载 Hentai@Home 客户端', url: url });
+    });
+    return {
+      isSupported: true,
+      title: 'Hentai@Home',
+      sections: sections,
+      links: links,
+      message: sections.length ? null : '当前账号没有可显示的 H@H 客户端状态。'
+    };
+  }
+
+  function parseDonationSummary(page) {
+    if (page.loggedOut) return { isSupported: false, title: '捐赠', sections: [], links: [], message: '请先登录 E-Hentai 账号。' };
+    var text = cleanSnippetText(page.body || '');
+    var metrics = [];
+    var confirmed = firstMatch(text, /(?:Confirmed|已确认)\s*[:：]?\s*([^\s]+(?:\s*(?:BTC|BCH|USD|\$))?)/i);
+    var pending = firstMatch(text, /(?:Pending|待定)\s*[:：]?\s*([^\s]+(?:\s*(?:BTC|BCH|USD|\$))?)/i);
+    var level = firstMatch(text, /(?:Donation\s+Level|捐赠等级)\s*[:：]?\s*([A-Za-z\u4e00-\u9fff][A-Za-z\u4e00-\u9fff ]{0,30}?)(?=\s+(?:Confirmed|Pending|已确认|待定)\b|$)/i);
+    if (level) metrics.push(accountMetric('donation_level', '捐赠等级', level));
+    if (confirmed) metrics.push(accountMetric('donation_confirmed', '已确认', confirmed));
+    if (pending) metrics.push(accountMetric('donation_pending', '待定', pending));
+    return {
+      isSupported: true,
+      title: '捐赠',
+      sections: metrics.length ? [{ id: 'donation_summary', title: '只读概况', metrics: metrics }] : [],
+      links: [{ id: 'donation_official', title: '在官网查看捐赠页面', url: accountSettingsSite() + '/bitcoin.php' }],
+      message: metrics.length ? null : '为保护付款信息，App 只展示官网可识别的捐赠概况。'
+    };
+  }
+
+  function parseHathPerksState(page) {
+    if (page.loggedOut) return { isSupported: false, title: 'Hath Perks', sections: [], links: [], message: '请先登录 E-Hentai 账号。' };
+    var sections = [];
+    page.doc.select('table tr').forEach(function (row, index) {
+      var cells = row.select('td');
+      if (cells.length < 3) return;
+      var name = cleanSnippetText(cells[0].text() || '');
+      var description = cleanSnippetText(cells[1].text() || '');
+      var purchase = cleanSnippetText(cells[2].text() || '');
+      if (!name || !description) return;
+      var cost = firstMatch(purchase, /([0-9,]+\s*Hath)/i);
+      var owned = /Owned|已获得|Acquired/i.test(purchase);
+      var metrics = [accountMetric('perk_' + index + '_state', '状态', owned ? '已获得' : '未获得')];
+      if (cost) metrics.push(accountMetric('perk_' + index + '_cost', '所需 Hath', cost));
+      metrics.push(accountMetric('perk_' + index + '_description', '说明', description));
+      sections.push({ id: 'perk_' + index, title: name, metrics: metrics.filter(function (metric) { return !!metric; }) });
+    });
+    return {
+      isSupported: true,
+      title: 'Hath Perks',
+      sections: sections,
+      links: [{ id: 'perks_official', title: '在官网查看 Hath Perks', url: accountSettingsSite() + '/hathperks.php' }],
+      message: sections.length ? null : '官网暂未返回可识别的 Hath Perks。'
+    };
+  }
+
+  function parseNewsState(body) {
+    var doc = parseHTML(body || '', accountSettingsSite() + '/news.php');
+    var items = [];
+    doc.select('table tr').forEach(function (row, index) {
+      var cells = row.select('th, td');
+      if (cells.length < 2) return;
+      var first = cleanSnippetText(cells[0].text() || '');
+      var rest = [];
+      for (var i = 1; i < cells.length; i++) {
+        var value = cleanSnippetText(cells[i].text() || '');
+        if (value) rest.push(value);
+      }
+      if (!first || !rest.length) return;
+      var anchor = row.selectFirst('a[href]');
+      var url = anchor ? safeReadOnlyLink(anchor.attr('abs:href') || anchor.attr('href') || '') : null;
+      items.push({ id: 'news_row_' + index, title: first, dateText: first, body: rest.join('\n'), url: url });
+    });
+    if (!items.length) {
+      doc.select('h1, h2').forEach(function (heading, index) {
+        var title = cleanSnippetText(heading.text() || '');
+        if (title) items.push({ id: 'news_heading_' + index, title: title, dateText: null, body: '', url: null });
+      });
+    }
+    return { isSupported: items.length > 0, items: items, message: items.length ? null : '官网暂未返回新闻内容。' };
+  }
+
+  function bountySelectValue(doc, name, semantic) {
+    if (!semantic || semantic === 'all') return null;
+    var patterns = {
+      standard: /Standard|标准/i,
+      translation: /Translation|翻译/i,
+      editing: /Editing|编辑/i,
+      open: /All\s+Open|所有未完成|开放式/i,
+      reserved: /All\s+Reserved|所有已保留/i,
+      claimed: /All\s+Claimed|所有已认领|所有已投稿/i,
+      completed: /All\s+Completed|所有已完成/i,
+      posted: /Posted\s+By\s+Me|我发布|我发起/i,
+      boosted: /Boosted\s+By\s+Me|我加价|我投资/i,
+      accepted: /Accepted\s+By\s+Me|我接受/i,
+      reserved_me: /Reserved\s+For\s+Me|为我保留|我保留/i,
+      claimed_me: /Claimed\s+By\s+Me|我认领|我投稿/i,
+      completed_me: /Completed\s+By\s+Me|我完成/i
+    };
+    var pattern = patterns[semantic];
+    var selected = null;
+    var select = doc ? doc.selectFirst('select[name="' + name + '"]') : null;
+    if (select && pattern) {
+      select.select('option').forEach(function (option) {
+        if (selected != null) return;
+        if (pattern.test(cleanSnippetText(option.text() || ''))) selected = option.attr('value') || '';
+      });
+    }
+    return selected;
+  }
+
+  function bountyURL(page, query, type, status, formDoc) {
+    var parts = [];
+    if (query) {
+      var searchInput = formDoc ? formDoc.selectFirst('#searchform input[type="text"][name], form input[type="text"][name]') : null;
+      appendParam(parts, searchInput ? (searchInput.attr('name') || 'search') : 'search', String(query).trim());
+    }
+    var typeValue = bountySelectValue(formDoc, 't', type);
+    var statusValue = bountySelectValue(formDoc, 's', status);
+    if (typeValue != null) appendParam(parts, 't', typeValue);
+    if (statusValue != null) appendParam(parts, 's', statusValue);
+    if (page > 1) appendParam(parts, 'p', page - 1);
+    return accountSettingsSite() + '/bounty.php' + (parts.length ? '?' + parts.join('&') : '');
+  }
+
+  function parseBountyRow(row) {
+    var anchor = row.selectFirst('a[href*="bounty.php?"][href*="bid="]');
+    if (!anchor) return null;
+    var href = safeReadOnlyLink(anchor.attr('abs:href') || anchor.attr('href') || '');
+    if (!href) return null;
+    var idMatch = href.match(/[?&]bid=([0-9]+)/i);
+    if (!idMatch) return null;
+    var cells = row.select('td');
+    var values = [];
+    cells.forEach(function (cell) { values.push(cleanSnippetText(cell.text() || '')); });
+    var rowText = values.join(' · ');
+    var posterAnchor = row.selectFirst('a[href*="bounty.php?u="]');
+    return {
+      id: idMatch[1],
+      url: href,
+      title: cleanSnippetText(anchor.text() || '') || ('悬赏 #' + idMatch[1]),
+      type: firstMatch(rowText, /\b(Standard|Translation|Editing|标准|翻译|编辑)\b/i),
+      status: firstMatch(rowText, /\b(Open\/[A-Za-z]+|Closed\/[A-Za-z]+|开放[^·]*|关闭[^·]*|已完成|已保留|已认领)\b/i),
+      reward: firstMatch(rowText, /([0-9,]+\s*(?:Credits?|C|Hath)(?:\s*\+\s*[0-9,]+\s*Hath)?)/i),
+      postedBy: posterAnchor ? cleanSnippetText(posterAnchor.text() || '') : null,
+      dateText: values.length ? values[0] : null,
+      summary: rowText || null
+    };
+  }
+
+  function parseBountyList(body) {
+    var doc = parseHTML(body || '', accountSettingsSite());
+    if (/name=["']ipb_login_submit|This page requires you to log on/i.test(body || '')) {
+      return { items: [], hasNextPage: false, metadata: { message: '请先登录 E-Hentai 账号。' } };
+    }
+    var items = [];
+    doc.select('table.itg tr, table tr').forEach(function (row) {
+      var bounty = parseBountyRow(row);
+      if (bounty && !items.some(function (item) { return item.id === bounty.id; })) items.push(bounty);
+    });
+    var hasNext = false;
+    doc.select('a[href*="bounty.php"][href*="p="]').forEach(function (anchor) {
+      if (/^(?:>|Next|下一页)$/i.test(cleanSnippetText(anchor.text() || ''))) hasNext = true;
+    });
+    return { items: items, hasNextPage: hasNext };
+  }
+
+  function parseBountyDetails(body, fallback) {
+    var doc = parseHTML(body || '', accountSettingsSite());
+    if (/name=["']ipb_login_submit|This page requires you to log on/i.test(body || '')) {
+      return { isSupported: false, bounty: fallback || null, sections: [], message: '请先登录 E-Hentai 账号。' };
+    }
+    var sections = genericReadOnlyTableSections(doc, 'bounty_detail', 30);
+    var details = [];
+    doc.select('p').forEach(function (paragraph, index) {
+      if (details.length >= 12) return;
+      var value = cleanSnippetText(paragraph.text() || '');
+      if (value.length < 2) return;
+      details.push(accountMetric('bounty_paragraph_' + index, '说明', value));
+    });
+    if (details.length) sections.unshift({ id: 'bounty_description', title: '悬赏说明', metrics: details });
+    return {
+      isSupported: sections.length > 0,
+      bounty: fallback || null,
+      sections: sections,
+      message: sections.length ? null : '官网暂未返回可识别的悬赏详情。'
+    };
+  }
+
   globalThis.__source = {
     // 热门：站点的 /popular 快照页（单页，无分页）。
     getPopular: function (page) {
@@ -3303,7 +3594,10 @@
     // c3=作者+时间、c6=正文、c5=分值。上传者评论(无分值且居首)打标记置顶。
     // 正文走 .html() → parseCommentSpans 保真排版（换行/链接），body 用切片拼接成纯文本兜底。
     getComments: function (manga) {
-      return parseGalleryComments(parseHTML(galleryBody(manga), site()));
+      // Comment ordering changes the server-selected top-50 subset. Always
+      // refresh this document so a newly-saved sort is not masked by the
+      // gallery detail cache.
+      return parseGalleryComments(parseHTML(galleryBody(manga, true), site()));
     },
 
     submitComment: function (manga, text) {
@@ -3374,6 +3668,56 @@
     getAccountOverview: function () {
       var res = fetch('https://e-hentai.org/home.php', listHeaders());
       return parseAccountOverview(res.body || '');
+    },
+
+    getAccountStatistics: function () {
+      return parseAccountStatistics(readOnlyPageResponse('/stats.php').body);
+    },
+
+    getHentaiAtHomeState: function () {
+      return parseHentaiAtHomeState(readOnlyPageResponse('/hentaiathome.php'));
+    },
+
+    getDonationSummary: function () {
+      return parseDonationSummary(readOnlyPageResponse('/bitcoin.php'));
+    },
+
+    getHathPerksState: function () {
+      return parseHathPerksState(readOnlyPageResponse('/hathperks.php'));
+    },
+
+    getNews: function () {
+      var response = readOnlyPageResponse('/news.php');
+      return parseNewsState(response.body);
+    },
+
+    getBounties: function (page, query, type, status) {
+      var currentPage = Math.max(1, parseInt(page, 10) || 1);
+      var baseURL = accountSettingsSite() + '/bounty.php';
+      var baseResponse = fetch(baseURL, {
+        headers: accountSettingsHeaders(false),
+        cachePolicy: 'reloadIgnoringLocalCacheData'
+      });
+      var baseDoc = parseHTML(baseResponse.body || '', accountSettingsSite());
+      var url = bountyURL(currentPage, query, type, status, baseDoc);
+      var res = url === baseURL ? baseResponse : fetch(url, {
+        headers: accountSettingsHeaders(false),
+        cachePolicy: 'reloadIgnoringLocalCacheData'
+      });
+      return parseBountyList(res.body || '');
+    },
+
+    getBountyDetails: function (bounty) {
+      var rawURL = bounty && bounty.url ? String(bounty.url) : '';
+      var url = safeReadOnlyLink(rawURL);
+      if (!url || !/^https:\/\/e-hentai\.org\/bounty\.php\?[^#]*\bbid=[0-9]+/i.test(url)) {
+        return { isSupported: false, bounty: bounty || null, sections: [], message: '悬赏地址未通过同域校验。' };
+      }
+      var res = fetch(url, {
+        headers: accountSettingsHeaders(false),
+        cachePolicy: 'reloadIgnoringLocalCacheData'
+      });
+      return parseBountyDetails(res.body || '', bounty || null);
     },
 
     getFavoriteState: function (manga) {

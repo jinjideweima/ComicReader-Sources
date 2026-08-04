@@ -5,6 +5,11 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade E-Hentai to 1.3.0: fix the website's inverse `ct_*` category flags,
+  harden My Settings save/readback, refresh comments after server-side sort
+  changes, expose official filter counts and temporary bypass links, and add
+  native read-only account statistics, Hentai@Home, donation, Hath Perks,
+  news, and bounty data.
 - Upgrade E-Hentai to 1.2.0 with typed My Settings read/write support,
   allowlisted full-form preservation, entitlement locks, per-field readback,
   account-filter result metadata, and all five official list layouts.
