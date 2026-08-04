@@ -35,6 +35,11 @@
   function toplistSite() {
     return 'https://e-hentai.org';
   }
+  // 账号配置在表站与里站之间共享。始终走表站账户端点，避免用户切到
+  // ExHentai 后把内容站点的可用性误当成设置保存结果。
+  function accountSettingsSite() {
+    return 'https://e-hentai.org';
+  }
   var UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 
   // nw=1（跳成人警告插页）与登录 cookie 现统一由 App 侧注入 HTTPCookieStorage，会话自动带上，
@@ -68,6 +73,21 @@
   function formHeaders() {
     var h = headerFields();
     h['Content-Type'] = 'application/x-www-form-urlencoded';
+    return h;
+  }
+
+  function accountSettingsHeaders(isForm) {
+    var h = {
+      'User-Agent': UA,
+      'Referer': accountSettingsSite() + '/uconfig.php'
+    };
+    if (isForm) {
+      h['Content-Type'] = 'application/x-www-form-urlencoded';
+      h['Origin'] = accountSettingsSite();
+    } else {
+      h['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+    }
+    h['Cache-Control'] = 'no-cache';
     return h;
   }
 
@@ -865,6 +885,218 @@
     return doc.selectFirst('form[action*="uconfig"], form#uconfig');
   }
 
+  function namedControls(form, name) {
+    if (!form || !name) return [];
+    return form.select('[name="' + String(name).replace(/(["\\])/g, '\\$1') + '"]');
+  }
+
+  function selectedControlValue(form, name) {
+    var controls = namedControls(form, name);
+    for (var i = 0; i < controls.length; i++) {
+      var control = controls[i];
+      var type = (control.attr('type') || '').toLowerCase();
+      if ((type === 'radio' || type === 'checkbox') && !control.hasAttr('checked')) continue;
+      var outer = control.outerHtml ? control.outerHtml() : '';
+      if (/^<\s*select/i.test(outer)) {
+        var option = control.selectFirst('option[selected]') || control.selectFirst('option');
+        return option ? (option.attr('value') || option.text() || '') : '';
+      }
+      return control.attr('value') || control.text() || (type === 'checkbox' ? 'on' : '');
+    }
+    return null;
+  }
+
+  function textControlValue(form, name) {
+    var controls = namedControls(form, name);
+    if (!controls.length) return null;
+    var control = controls[0];
+    var outer = control.outerHtml ? control.outerHtml() : '';
+    if (/^<\s*textarea/i.test(outer)) return control.text() || control.attr('value') || '';
+    return control.attr('value') || '';
+  }
+
+  function controlHasAvailableValue(form, name, value) {
+    var controls = namedControls(form, name);
+    for (var i = 0; i < controls.length; i++) {
+      var control = controls[i];
+      var outer = control.outerHtml ? control.outerHtml() : '';
+      if (/^<\s*select/i.test(outer)) {
+        var options = control.select('option');
+        for (var j = 0; j < options.length; j++) {
+          if (String(options[j].attr('value') || '') === String(value)) {
+            return !control.hasAttr('disabled') && !options[j].hasAttr('disabled');
+          }
+        }
+      } else if (String(control.attr('value') || '') === String(value)) {
+        return !control.hasAttr('disabled');
+      }
+    }
+    return false;
+  }
+
+  function settingOptions(form, name, titles) {
+    var result = [];
+    var controls = namedControls(form, name);
+    for (var i = 0; i < controls.length; i++) {
+      var control = controls[i];
+      var outer = control.outerHtml ? control.outerHtml() : '';
+      if (/^<\s*select/i.test(outer)) {
+        control.select('option').forEach(function (option) {
+          var value = option.attr('value') || '';
+          var available = !control.hasAttr('disabled') && !option.hasAttr('disabled');
+          result.push({
+            id: value,
+            title: (titles && titles[value]) || cleanSnippetText(option.text() || '') || value,
+            isAvailable: available,
+            unavailableReason: available ? null : '当前账号权益不可用'
+          });
+        });
+      } else {
+        var value = control.attr('value') || '';
+        var available = !control.hasAttr('disabled');
+        result.push({
+          id: value,
+          title: (titles && titles[value]) || value,
+          isAvailable: available,
+          unavailableReason: available ? null : '当前账号权益不可用'
+        });
+      }
+    }
+    return result;
+  }
+
+  var ACCOUNT_SETTING_TITLES = {
+    uh: {
+      '0': '任意 H@H 客户端（推荐）',
+      '1': '仅默认端口客户端',
+      '2': '不使用 H@H（HTTPS）',
+      '3': '不使用 H@H（HTTP）'
+    },
+    xr: { '0': '自动', '1': '800', '3': '1280', '4': '1920', '5': '2560' },
+    tl: { '0': '英文 / 罗马音', '1': '日文标题' },
+    ar: {
+      '0': '手动选画质，手动下载',
+      '1': '手动选画质，自动下载',
+      '2': '原始画质，手动下载',
+      '3': '原始画质，自动下载',
+      '4': '重采样画质，手动下载',
+      '5': '重采样画质，自动下载'
+    },
+    fs: { '0': '图库最近更新时间', '1': '收藏时间' },
+    rc: { '0': '25', '1': '50', '2': '100' },
+    cs: { '0': '最早的评论', '1': '最近的评论', '2': '分数最高' }
+  };
+
+  var EH_CATEGORY_SETTING_KEYS = [
+    { id: 2, key: 'ct_doujinshi' },
+    { id: 4, key: 'ct_manga' },
+    { id: 8, key: 'ct_artistcg' },
+    { id: 16, key: 'ct_gamecg' },
+    { id: 512, key: 'ct_western' },
+    { id: 256, key: 'ct_non-h' },
+    { id: 32, key: 'ct_imageset' },
+    { id: 64, key: 'ct_cosplay' },
+    { id: 128, key: 'ct_asianporn' },
+    { id: 1, key: 'ct_misc' }
+  ];
+
+  function categoryMaskFromForm(form) {
+    var found = false;
+    var mask = 0;
+    EH_CATEGORY_SETTING_KEYS.forEach(function (entry) {
+      var value = textControlValue(form, entry.key);
+      if (value == null) return;
+      found = true;
+      if (!/^(?:0|off|false|no)$/i.test(String(value).trim())) mask |= entry.id;
+    });
+    return found ? mask : null;
+  }
+
+  function integerSetting(form, name) {
+    var value = textControlValue(form, name);
+    if (value == null || String(value).trim() === '') return null;
+    var parsed = parseInt(value, 10);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  function parseAccountSettingsBody(body, message) {
+    var doc = parseHTML(body || '', accountSettingsSite());
+    var form = findAccountSettingsForm(doc);
+    var filters = parseAccountFiltersBody(body || '', null);
+    if (!form || !filters.isSupported) {
+      return {
+        isSupported: false,
+        profileName: null,
+        imageLoadOptions: [], imageRegionOptions: [], imageResolutionOptions: [],
+        galleryTitleOptions: [], archiveOptions: [], favoriteNames: [],
+        favoriteSortOptions: [], resultCountOptions: [], languageOptions: [],
+        excludedUploaders: [], commentSortOptions: [], canPreferOriginal: false,
+        fieldSyncStatus: {},
+        message: message || '无法读取官网“我的设置”，请确认账号已经登录。'
+      };
+    }
+
+    var profile = doc.selectFirst('select[name="profile_set"] option[selected]') ||
+      doc.selectFirst('select[name="profile_set"] option');
+    var favoriteNames = [];
+    for (var favoriteIndex = 0; favoriteIndex < 10; favoriteIndex++) {
+      var favoriteName = textControlValue(form, 'favorite_' + favoriteIndex);
+      favoriteNames.push(favoriteName == null ? '' : String(favoriteName));
+    }
+    var originalAvailable = controlHasAvailableValue(form, 'oi', '1');
+    return {
+      isSupported: true,
+      profileName: profile ? cleanSnippetText(profile.text() || '') : null,
+      imageLoadMode: selectedControlValue(form, 'uh'),
+      imageLoadOptions: settingOptions(form, 'uh', ACCOUNT_SETTING_TITLES.uh),
+      imageRegion: selectedControlValue(form, 'co'),
+      imageRegionOptions: settingOptions(form, 'co', null),
+      imageResolution: selectedControlValue(form, 'xr'),
+      imageResolutionOptions: settingOptions(form, 'xr', ACCOUNT_SETTING_TITLES.xr),
+      preferOriginal: selectedControlValue(form, 'oi') === '1',
+      canPreferOriginal: originalAvailable,
+      preferOriginalUnavailableReason: originalAvailable ? null : '需要原始之力 Hath Perk 或相应账号权益',
+      galleryTitleMode: selectedControlValue(form, 'tl'),
+      galleryTitleOptions: settingOptions(form, 'tl', ACCOUNT_SETTING_TITLES.tl),
+      archiveMode: selectedControlValue(form, 'ar'),
+      archiveOptions: settingOptions(form, 'ar', ACCOUNT_SETTING_TITLES.ar),
+      defaultCategoryMask: categoryMaskFromForm(form),
+      favoriteNames: favoriteNames,
+      favoriteSort: selectedControlValue(form, 'fs'),
+      favoriteSortOptions: settingOptions(form, 'fs', ACCOUNT_SETTING_TITLES.fs),
+      resultCount: selectedControlValue(form, 'rc'),
+      resultCountOptions: settingOptions(form, 'rc', ACCOUNT_SETTING_TITLES.rc),
+      coverScale: integerSetting(form, 'tp'),
+      ratingColors: textControlValue(form, 'ru'),
+      watchedThreshold: integerSetting(form, 'wt'),
+      filterThreshold: integerSetting(form, 'ft'),
+      showFilteredCount: selectedControlValue(form, 'tf') === '0',
+      languageOptions: filters.languageOptions,
+      excludedUploaders: filters.excludedUploaders,
+      uploaderCapacityUsed: filters.uploaderCapacityUsed,
+      uploaderCapacityMaximum: filters.uploaderCapacityMaximum,
+      commentSort: selectedControlValue(form, 'cs'),
+      commentSortOptions: settingOptions(form, 'cs', ACCOUNT_SETTING_TITLES.cs),
+      fieldSyncStatus: {
+        imageLoadMode: 'synced', imageRegion: 'synced', imageResolution: 'synced', preferOriginal: 'synced',
+        galleryTitleMode: 'synced', archiveMode: 'synced', defaultCategoryMask: 'synced', favoriteNames: 'synced',
+        favoriteSort: 'synced', resultCount: 'synced', coverScale: 'synced', ratingColors: 'synced',
+        watchedThreshold: 'synced', filterThreshold: 'synced', showFilteredCount: 'synced',
+        excludedLanguageOptionIDs: 'synced', excludedUploaders: 'synced', commentSort: 'synced'
+      },
+      message: message || null
+    };
+  }
+
+  function fetchAccountSettings(message) {
+    var url = accountSettingsSite() + '/uconfig.php';
+    var res = fetch(url, {
+      headers: accountSettingsHeaders(false),
+      cachePolicy: 'reloadIgnoringLocalCacheData'
+    });
+    return { body: res.body || '', state: parseAccountSettingsBody(res.body || '', message) };
+  }
+
   function parseAccountFiltersBody(body, message) {
     var doc = parseHTML(body || '', site());
     var form = findAccountSettingsForm(doc);
@@ -941,10 +1173,8 @@
   }
 
   function fetchAccountFilters(message) {
-    var fields = htmlHeaders();
-    fields['Cache-Control'] = 'no-cache';
-    var res = fetch(site() + '/uconfig.php', {
-      headers: fields,
+    var res = fetch(accountSettingsSite() + '/uconfig.php', {
+      headers: accountSettingsHeaders(false),
       cachePolicy: 'reloadIgnoringLocalCacheData'
     });
     return { body: res.body || '', state: parseAccountFiltersBody(res.body || '', message) };
@@ -959,6 +1189,225 @@
       });
     });
     return result;
+  }
+
+  function replaceFormField(fields, name, value) {
+    delete fields[name];
+    addFormField(fields, name, value);
+  }
+
+  function languageSelectionIDs(state) {
+    return (state.languageOptions || []).filter(function (option) {
+      return option.isExcluded;
+    }).map(function (option) {
+      return String(option.id);
+    }).sort();
+  }
+
+  function accountSettingsValueMatches(field, expected, state) {
+    switch (field) {
+      case 'imageLoadMode': return String(state.imageLoadMode) === String(expected);
+      case 'imageRegion': return String(state.imageRegion == null ? '' : state.imageRegion) === String(expected);
+      case 'imageResolution': return String(state.imageResolution) === String(expected);
+      case 'preferOriginal': return !!state.preferOriginal === !!expected;
+      case 'galleryTitleMode': return String(state.galleryTitleMode) === String(expected);
+      case 'archiveMode': return String(state.archiveMode) === String(expected);
+      case 'defaultCategoryMask': return parseInt(state.defaultCategoryMask, 10) === parseInt(expected, 10);
+      case 'favoriteNames': return (state.favoriteNames || []).slice(0, 10).join('\n') === expected.slice(0, 10).join('\n');
+      case 'favoriteSort': return String(state.favoriteSort) === String(expected);
+      case 'resultCount': return String(state.resultCount) === String(expected);
+      case 'coverScale': return parseInt(state.coverScale, 10) === parseInt(expected, 10);
+      case 'ratingColors': return String(state.ratingColors || '').toUpperCase() === String(expected).toUpperCase();
+      case 'watchedThreshold': return parseInt(state.watchedThreshold, 10) === parseInt(expected, 10);
+      case 'filterThreshold': return parseInt(state.filterThreshold, 10) === parseInt(expected, 10);
+      case 'showFilteredCount': return !!state.showFilteredCount === !!expected;
+      case 'excludedLanguageOptionIDs': return languageSelectionIDs(state).join('\n') === expected.slice().sort().join('\n');
+      case 'excludedUploaders': return normalizedUploaderList(state.excludedUploaders).slice().sort().join('\n') === expected.slice().sort().join('\n');
+      case 'commentSort': return String(state.commentSort) === String(expected);
+      default: return false;
+    }
+  }
+
+  function updateAccountSettingsPatch(rawPatch) {
+    var patch = rawPatch || {};
+    var fetched = fetchAccountSettings(null);
+    var before = fetched.state;
+    if (!before.isSupported) {
+      return { isSupported: false, state: before, updatedFields: [], failedFields: [], message: before.message };
+    }
+    var doc = parseHTML(fetched.body, accountSettingsSite());
+    var form = findAccountSettingsForm(doc);
+    if (!form) {
+      before.isSupported = false;
+      before.message = '官网表单结构发生变化，本次没有保存。';
+      return { isSupported: false, state: before, updatedFields: [], failedFields: [], message: before.message };
+    }
+
+    var fields = extractSuccessfulFormFields(form);
+    var expected = {};
+    var failed = [];
+    function fail(name) {
+      if (failed.indexOf(name) < 0) failed.push(name);
+    }
+    function setChoice(property, fieldName, value) {
+      if (!controlHasAvailableValue(form, fieldName, value)) {
+        fail(property);
+        return;
+      }
+      replaceFormField(fields, fieldName, value);
+      expected[property] = String(value);
+    }
+
+    if (patch.imageLoadMode != null) setChoice('imageLoadMode', 'uh', patch.imageLoadMode);
+    if (patch.imageRegion != null) setChoice('imageRegion', 'co', patch.imageRegion);
+    if (patch.imageResolution != null) setChoice('imageResolution', 'xr', patch.imageResolution);
+    if (patch.preferOriginal != null) setChoice('preferOriginal', 'oi', patch.preferOriginal ? '1' : '0');
+    if (expected.preferOriginal != null) expected.preferOriginal = !!patch.preferOriginal;
+    if (patch.galleryTitleMode != null) setChoice('galleryTitleMode', 'tl', patch.galleryTitleMode);
+    if (patch.archiveMode != null) setChoice('archiveMode', 'ar', patch.archiveMode);
+    if (patch.favoriteSort != null) setChoice('favoriteSort', 'fs', patch.favoriteSort);
+    if (patch.resultCount != null) setChoice('resultCount', 'rc', patch.resultCount);
+    if (patch.commentSort != null) setChoice('commentSort', 'cs', patch.commentSort);
+
+    if (patch.defaultCategoryMask != null) {
+      var categoryMask = parseInt(patch.defaultCategoryMask, 10);
+      var hasAllCategoryFields = EH_CATEGORY_SETTING_KEYS.every(function (entry) {
+        return textControlValue(form, entry.key) != null;
+      });
+      if (isNaN(categoryMask) || !hasAllCategoryFields) {
+        fail('defaultCategoryMask');
+      } else {
+        categoryMask &= EH_ALL_CATEGORY_MASK;
+        EH_CATEGORY_SETTING_KEYS.forEach(function (entry) {
+          replaceFormField(fields, entry.key, (categoryMask & entry.id) !== 0 ? '1' : '0');
+        });
+        expected.defaultCategoryMask = categoryMask;
+      }
+    }
+
+    if (Array.isArray(patch.favoriteNames)) {
+      var names = [];
+      for (var favoriteIndex = 0; favoriteIndex < 10; favoriteIndex++) {
+        var nameField = 'favorite_' + favoriteIndex;
+        if (textControlValue(form, nameField) == null) {
+          fail('favoriteNames');
+          break;
+        }
+        var nameValue = patch.favoriteNames[favoriteIndex] == null ? '' : String(patch.favoriteNames[favoriteIndex]);
+        names.push(nameValue);
+        replaceFormField(fields, nameField, nameValue);
+      }
+      if (failed.indexOf('favoriteNames') < 0) expected.favoriteNames = names;
+    }
+
+    function setBoundedInteger(property, fieldName, minimum, maximum) {
+      if (patch[property] == null) return;
+      var value = parseInt(patch[property], 10);
+      if (isNaN(value) || value < minimum || value > maximum || textControlValue(form, fieldName) == null) {
+        fail(property);
+        return;
+      }
+      replaceFormField(fields, fieldName, String(value));
+      expected[property] = value;
+    }
+    setBoundedInteger('coverScale', 'tp', 75, 150);
+    setBoundedInteger('watchedThreshold', 'wt', 0, 9999);
+    setBoundedInteger('filterThreshold', 'ft', -9999, 0);
+
+    if (patch.ratingColors != null) {
+      var colors = String(patch.ratingColors || '').toUpperCase();
+      if (!/^[RGBY]{5}$/.test(colors) || textControlValue(form, 'ru') == null) {
+        fail('ratingColors');
+      } else {
+        replaceFormField(fields, 'ru', colors);
+        expected.ratingColors = colors;
+      }
+    }
+
+    if (patch.showFilteredCount != null) {
+      var filterCountValue = patch.showFilteredCount ? '0' : '1';
+      if (controlHasAvailableValue(form, 'tf', filterCountValue)) {
+        replaceFormField(fields, 'tf', filterCountValue);
+        expected.showFilteredCount = !!patch.showFilteredCount;
+      } else {
+        fail('showFilteredCount');
+      }
+    }
+
+    if (Array.isArray(patch.excludedLanguageOptionIDs)) {
+      var selected = {};
+      patch.excludedLanguageOptionIDs.forEach(function (id) { selected[String(id)] = true; });
+      var knownIDs = {};
+      var languageFieldNames = {};
+      before.languageOptions.forEach(function (option) {
+        knownIDs[String(option.id)] = true;
+        var parts = String(option.id || '').split('|');
+        if (parts.length < 2) return;
+        languageFieldNames[decodeURIComponent(parts.shift())] = true;
+      });
+      var containsUnknown = Object.keys(selected).some(function (id) { return !knownIDs[id]; });
+      if (containsUnknown) {
+        fail('excludedLanguageOptionIDs');
+      } else {
+        Object.keys(languageFieldNames).forEach(function (name) { delete fields[name]; });
+        before.languageOptions.forEach(function (option) {
+          if (!selected[String(option.id)]) return;
+          var parts = String(option.id || '').split('|');
+          var name = decodeURIComponent(parts.shift());
+          var value = decodeURIComponent(parts.join('|'));
+          addFormField(fields, name, value);
+        });
+        expected.excludedLanguageOptionIDs = Object.keys(selected).sort();
+      }
+    }
+
+    if (Array.isArray(patch.excludedUploaders)) {
+      var uploaders = normalizedUploaderList(patch.excludedUploaders);
+      if (before.uploaderCapacityMaximum != null && uploaders.length > before.uploaderCapacityMaximum) {
+        fail('excludedUploaders');
+      } else if (textControlValue(form, 'xu') == null) {
+        fail('excludedUploaders');
+      } else {
+        replaceFormField(fields, 'xu', uploaders.join('\n'));
+        expected.excludedUploaders = uploaders;
+      }
+    }
+
+    var requestedFields = Object.keys(expected);
+    if (!requestedFields.length) {
+      var noChangeMessage = failed.length ? '部分设置不可用，未向官网提交。' : '没有需要保存的修改。';
+      failed.forEach(function (field) { before.fieldSyncStatus[field] = 'failed'; });
+      return { isSupported: true, state: before, updatedFields: [], failedFields: failed, message: noChangeMessage };
+    }
+
+    var submit = form.selectFirst('input[type="submit"][name], button[type="submit"][name]');
+    if (submit) addFormField(fields, submit.attr('name') || '', submit.attr('value') || submit.text() || 'Apply');
+    fetch(accountSettingsSite() + '/uconfig.php', {
+      headers: accountSettingsHeaders(true),
+      method: 'POST',
+      body: formEncode(fields),
+      cachePolicy: 'reloadIgnoringLocalCacheData'
+    });
+
+    var after = fetchAccountSettings(null).state;
+    var updated = [];
+    requestedFields.forEach(function (field) {
+      if (accountSettingsValueMatches(field, expected[field], after)) updated.push(field);
+      else fail(field);
+    });
+    var message = failed.length
+      ? '官网未确认全部修改：' + failed.join(', ')
+      : '已同步到 E-Hentai 账号';
+    after.message = message;
+    updated.forEach(function (field) { after.fieldSyncStatus[field] = 'synced'; });
+    failed.forEach(function (field) { after.fieldSyncStatus[field] = 'failed'; });
+    return {
+      isSupported: true,
+      state: after,
+      updatedFields: updated,
+      failedFields: failed,
+      message: message
+    };
   }
 
   function parseArchiveCost(text) {
@@ -2069,6 +2518,41 @@
     return out;
   }
 
+  function accountFilterListMetadata(doc) {
+    if (!doc) return null;
+    var text = cleanSnippetText(doc.text() || '');
+    var countMatch = text.match(/(?:custom\s+filters?|过滤器)[\s\S]{0,100}?(?:removed|移除|过滤)[^0-9]{0,30}([0-9][0-9,]*)/i) ||
+      text.match(/(?:removed|移除|过滤)[^0-9]{0,30}([0-9][0-9,]*)[^\n]{0,40}(?:galleries|results|图库|结果)/i) ||
+      text.match(/([0-9][0-9,]*)[^\n]{0,30}(?:galleries|results|图库|结果)[^\n]{0,40}(?:removed|filtered|移除|过滤)/i) ||
+      text.match(/(?:从页面|页面)[^0-9]{0,30}([0-9][0-9,]*)[^\n]{0,30}(?:结果|图库)/i);
+    var metadata = {};
+    if (countMatch) {
+      metadata.filteredCount = String(parseInt(countMatch[1].replace(/,/g, ''), 10) || 0);
+      metadata.filtersApplied = '1';
+    }
+    var disableURL = null;
+    doc.select('a[href]').forEach(function (anchor) {
+      if (disableURL) return;
+      var label = cleanSnippetText(anchor.text() || '');
+      if (!/(?:disable|ignore).{0,20}filters?|禁用.{0,12}过滤|忽略.{0,12}过滤/i.test(label)) return;
+      var candidate = anchor.attr('abs:href') || anchor.attr('href') || '';
+      if (candidate.indexOf('/') === 0) candidate = site() + candidate;
+      if (/^https:\/\/(?:e-hentai\.org|exhentai\.org)\//i.test(candidate)) disableURL = candidate;
+    });
+    if (disableURL) {
+      metadata.disableFiltersURL = disableURL;
+      metadata.filtersApplied = '1';
+    }
+    return Object.keys(metadata).length ? metadata : null;
+  }
+
+  function mergeMetadata(target, incoming) {
+    target = target || {};
+    if (!incoming) return target;
+    Object.keys(incoming).forEach(function (key) { target[key] = incoming[key]; });
+    return target;
+  }
+
   function parseListWatchedTags(row) {
     var out = [];
     var seen = {};
@@ -2232,14 +2716,16 @@
     var hasNext = !!(nextHref && items.length > 0);
     if (hasNext) storage.set(transientKey('next:' + ctx + ':' + (page + 1)), nextHref);
     var result = { items: items, hasNextPage: hasNext };
-    if (ctx.indexOf('favorites:') === 0) result.metadata = favoriteCategoriesMetadata(doc);
+    result.metadata = mergeMetadata(result.metadata, accountFilterListMetadata(doc));
+    if (ctx.indexOf('favorites:') === 0) result.metadata = mergeMetadata(result.metadata, favoriteCategoriesMetadata(doc));
     if (page === 1 && ctx.indexOf('watched:') === 0) {
       var watchedState = fetchUserTagsState(null);
       if (watchedState.isSupported) {
         var watchedCount = watchedState.tags.filter(function (tag) { return tag.isWatched; }).length;
-        result.metadata = { watchedTagCount: String(watchedCount) };
+        result.metadata = mergeMetadata(result.metadata, { watchedTagCount: String(watchedCount) });
       }
     }
+    if (result.metadata && Object.keys(result.metadata).length === 0) delete result.metadata;
     return result;
   }
 
@@ -2688,6 +3174,15 @@
       return listPage('search:' + base, base, page);
     },
 
+    getAccountFilterBypassList: function (rawURL) {
+      var url = String(rawURL || '').trim();
+      var prefix = site() + '/';
+      if (url.indexOf(prefix) !== 0) {
+        throw new Error('临时过滤链接不是当前 EH 站点的 HTTPS 地址。');
+      }
+      return listPage('account-filter-bypass:' + url, url, 1);
+    },
+
     getFavorites: function (page, category, query, sort) {
       var base = buildFavoritesURL(page, category, query, sort);
       return listPage('favorites:' + (category == null ? 'all' : String(category)), base, page);
@@ -3084,6 +3579,14 @@
       return fetchAccountFilters(null).state;
     },
 
+    getAccountSettings: function () {
+      return fetchAccountSettings(null).state;
+    },
+
+    updateAccountSettings: function (patch) {
+      return updateAccountSettingsPatch(patch);
+    },
+
     setAccountFilters: function (excludedLanguageOptionIDs, excludedUploaders) {
       var fetched = fetchAccountFilters(null);
       var current = fetched.state;
@@ -3132,8 +3635,9 @@
       if (submit) addFormField(fields, submit.attr('name') || '', submit.attr('value') || submit.text() || 'Apply');
       var rawAction = form.attr('action') || '';
       var action = rawAction ? (form.attr('abs:action') || rawAction) : '';
-      var url = (!action || action === '#') ? site() + '/uconfig.php' : abs(action);
-      fetch(url, { headers: formHeaders(), method: 'POST', body: formEncode(fields) });
+      // 账户设置只允许提交到固定表站端点；不跟随页面里可能变化的 action。
+      var url = accountSettingsSite() + '/uconfig.php';
+      fetch(url, { headers: accountSettingsHeaders(true), method: 'POST', body: formEncode(fields) });
 
       var after = fetchAccountFilters(null).state;
       var actualSelected = after.languageOptions.filter(function (option) { return option.isExcluded; }).map(function (option) { return option.id; }).sort();

@@ -5,6 +5,9 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade E-Hentai to 1.2.0 with typed My Settings read/write support,
+  allowlisted full-form preservation, entitlement locks, per-field readback,
+  account-filter result metadata, and all five official list layouts.
 - Declare a signed, user-visible feature catalogue for all four sources so the
   app can expose their complete capabilities during review and management.
 - Rename Baozi and CopyManga to their Chinese display names.

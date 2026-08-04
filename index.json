@@ -144,7 +144,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "EaF6oaNCeoe7nR8kxw1XCJN3PsXGVLpVzsVw5smJR2k3CeVyLzAuLRhbAr0gHTgtPAABxd+lwHTFdtGxKKGyBw=="
+        "value" : "oG2q9bYoI8dEEdLy49pSs2e+a5aidCsR/qOtLqquTBEov3EYJE7+SwhVk0jPmXrdZJ5PtlBSphXz8ti9HwB4AQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -268,7 +268,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "///9r4KJhuClM9iuwQnxWg2rk44CqgHszNKTcu8T8ZhukIpz3X4lxEt2ZSeyhvtUndm6o+dkiYgJDl2RuSL6Dg=="
+        "value" : "PE/p8r2ml4jOhPEEQ2KkS7JdzZYoRU/6bQUZUEWwk/ZdrAhLodBdNhpF3NBE+/8XrEIJuJnvvjQjt/BkRcS9Cw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -372,10 +372,10 @@
         },
         {
           "category" : "account",
-          "description" : "管理官网排除语言和排除上传者规则。",
-          "id" : "account_filters",
+          "description" : "读取、增量修改并回读验证官网 My Settings，包含图片、标题、收藏、评论与内容过滤。",
+          "id" : "account_settings",
           "requiresAccount" : true,
-          "title" : "账户内容过滤"
+          "title" : "我的设置"
         },
         {
           "category" : "discovery",
@@ -440,13 +440,13 @@
             {
               "fallbackBaseURL" : "https://e-hentai.org",
               "imageReferer" : "https://e-hentai.org/",
-              "title" : "E-Hentai 外站",
+              "title" : "E-Hentai（表站）",
               "value" : ""
             },
             {
               "fallbackBaseURL" : "https://exhentai.org",
               "imageReferer" : "https://exhentai.org/",
-              "title" : "ExHentai 里站",
+              "title" : "ExHentai（里站）",
               "value" : "ex"
             }
           ],
@@ -473,14 +473,14 @@
         }
       ],
       "scriptURL" : "sources/ehentai/source.js",
-      "sha256" : "8ca2fcc84aaadff994f7cdb77d5203b7caccdaa8580df1a9ca62e953c91c8ac8",
+      "sha256" : "7640d6fc5c05f0f3699d119aa1236cb8ac27aa06492d0a39ed4316c2d19a1f9b",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "E/L8/KZMpKGbqeu6wRjo8bxx2aITpoNnmepxVlEnCh1wqMTDlPrZg1AmBH6zX+lfCPd2ijz/ubZ+QmTPEEZ5Dg=="
+        "value" : "DM3+lZ50GWc6zbRRaKrYYGJVRGjiqCsdS6vXxpzUAgn968f67Z/1NxPmilkK+oClVIJ2VEtFo5Qox+0Refx+DQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
-      "version" : "1.1.3"
+      "version" : "1.2.0"
     },
     {
       "allowedHosts" : [
@@ -641,7 +641,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "8IBcXZ6QSUh2OcWiD9gP4hMWxPoWtHeb0H3Fk3Z6FvbRJBUuQRUPmpDks6koGIoy1s1tJTuv/ajQbp/ozjRwDQ=="
+        "value" : "4tWF3bhqWpoL4HP65mH9GIQUE51hy+/nvglccDjpNTGJNS9TkrBa9tmvhF9NC2StnC2kS5F1shQ9Pips7/HPCw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
