@@ -68,6 +68,7 @@ do {
               let sourceCodeURL = source["sourceCodeURL"] as? String,
               let allowedHosts = source["allowedHosts"] as? [String],
               let permissions = source["permissions"] as? [String],
+              let features = source["features"] as? [[String: Any]],
               let rating = source["contentRating"] as? String,
               let signature = source["signature"] as? [String: String]
         else { throw ValidationError.message("A source is missing required metadata") }
@@ -80,7 +81,30 @@ do {
         try require(URL(string: sourceCodeURL)?.scheme == "https", "Source URL must use HTTPS for \(id)")
         try require(!allowedHosts.isEmpty && allowedHosts.allSatisfy(validHostPattern), "Invalid allowedHosts for \(id)")
         try require(permissions.contains("network"), "Missing network permission for \(id)")
+        try require(!features.isEmpty && features.count <= 64, "Missing or invalid features for \(id)")
         try require(["everyone", "teen", "mature", "adult"].contains(rating), "Invalid content rating for \(id)")
+
+        var featureIDs = Set<String>()
+        for feature in features {
+            guard let featureID = feature["id"] as? String,
+                  let title = feature["title"] as? String,
+                  let category = feature["category"] as? String else {
+                throw ValidationError.message("Invalid feature metadata for \(id)")
+            }
+            try require(
+                featureID.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil,
+                "Invalid feature id for \(id)"
+            )
+            try require(featureIDs.insert(featureID).inserted, "Duplicate feature id for \(id): \(featureID)")
+            try require(!title.isEmpty && title.utf8.count <= 120, "Invalid feature title for \(id)")
+            try require(
+                ["discovery", "library", "interaction", "reading", "account"].contains(category),
+                "Invalid feature category for \(id): \(featureID)"
+            )
+            if (feature["requiresAccount"] as? Bool) == true {
+                try require(source["authentication"] != nil, "Account feature without authentication for \(id)")
+            }
+        }
 
         let scriptURL = root.appendingPathComponent(scriptPath).standardizedFileURL
         try require(scriptURL.path.hasPrefix(root.path + "/"), "Unsafe script path for \(id)")

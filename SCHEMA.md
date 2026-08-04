@@ -10,6 +10,10 @@
 - non-empty `allowedHosts` using exact hosts or `*.example.com` patterns;
 - explicit `network` permission and any persistent-preference use;
 - `everyone`, `teen`, `mature`, or `adult` content rating;
+- signed `features` entries with stable `id`, localized `title`, optional
+  `description`, one of `discovery` / `library` / `interaction` / `reading` /
+  `account`, and an optional `requiresAccount` marker. ComicReader presents
+  these during installation review and in the installed-source details page;
 - optional declarative `authentication` configuration. Account-capable sources
   must request `accountAuthentication` and, when applicable, `accountCookies`;
   a web login may separately sign `webLoginHosts` for verification-page

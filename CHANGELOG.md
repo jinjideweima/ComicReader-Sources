@@ -5,6 +5,8 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Declare a signed, user-visible feature catalogue for all four sources so the
+  app can expose their complete capabilities during review and management.
 - Rename Baozi and CopyManga to their Chinese display names.
 - Allow E-Hentai's publisher-isolated login session to retain Cloudflare
   challenge state and navigate the signed challenge host.

@@ -49,6 +49,58 @@
       },
       "contentRating" : "mature",
       "fallbackBaseURL" : "https://www.twmanga.com",
+      "features" : [
+        {
+          "category" : "discovery",
+          "description" : "首页推荐、热门、最新与分区浏览。",
+          "id" : "editorial_home",
+          "title" : "发现与分类"
+        },
+        {
+          "category" : "discovery",
+          "description" : "关键词、地区、题材与更新状态筛选。",
+          "id" : "search_filters",
+          "title" : "搜索与筛选"
+        },
+        {
+          "category" : "library",
+          "description" : "未登录时使用临时书架，登录后读取账号专属书架。",
+          "id" : "account_shelf",
+          "title" : "临时与账号书架"
+        },
+        {
+          "category" : "interaction",
+          "description" : "在漫画详情中收藏或取消收藏。",
+          "id" : "favorite_mutation",
+          "requiresAccount" : true,
+          "title" : "站点收藏管理"
+        },
+        {
+          "category" : "reading",
+          "description" : "详情、章节目录、长章节翻页与阅读线路回退。",
+          "id" : "chapter_reading",
+          "title" : "在线章节阅读"
+        },
+        {
+          "category" : "reading",
+          "description" : "将章节下载到本地书架供离线阅读。",
+          "id" : "chapter_download",
+          "title" : "章节下载"
+        },
+        {
+          "category" : "account",
+          "description" : "在繁体与简体内容线路之间切换。",
+          "id" : "content_language",
+          "title" : "内容语言切换"
+        },
+        {
+          "category" : "account",
+          "description" : "查看当前登录状态与账号书架概览。",
+          "id" : "account_overview",
+          "requiresAccount" : true,
+          "title" : "账户资料"
+        }
+      ],
       "id" : "baozi",
       "imageRequestHeaders" : {
         "Referer" : "https://www.twmanga.com/",
@@ -92,10 +144,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "P/2/EfK685A/Wu9KGWWWBxcI4OqHZ0Wv6RIO3Ou2egeQCfOOqB5hvV7WB0VZqjq/e71RjHlIHtGoDBlRKcLdAQ=="
+        "value" : "cm4dXQRysqppXYFUvGyIWTbp4TqwRzn84CHQS1Ebrc8XhvduW+qI7dSWGKrGDNZsJgtHXw+GV4/Gw9R+RpflAQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
-      "version" : "1.1.2"
+      "version" : "1.1.3"
     },
     {
       "allowedHosts" : [
@@ -137,6 +189,65 @@
       },
       "contentRating" : "mature",
       "fallbackBaseURL" : "https://www.mangacopy.com",
+      "features" : [
+        {
+          "category" : "discovery",
+          "description" : "首页推荐、热门更新与全新上架。",
+          "id" : "editorial_home",
+          "title" : "发现首页"
+        },
+        {
+          "category" : "discovery",
+          "description" : "男频、女频以及日榜、周榜、月榜和总榜。",
+          "id" : "toplist",
+          "title" : "多维排行榜"
+        },
+        {
+          "category" : "discovery",
+          "description" : "浏览站点专题并进入专题漫画列表。",
+          "id" : "collections",
+          "title" : "漫画专题"
+        },
+        {
+          "category" : "discovery",
+          "description" : "关键词、题材、地区、状态与受众筛选。",
+          "id" : "search_filters",
+          "title" : "搜索与筛选"
+        },
+        {
+          "category" : "library",
+          "description" : "读取账号云端收藏并支持收藏增删。",
+          "id" : "cloud_favorites",
+          "requiresAccount" : true,
+          "title" : "云端收藏"
+        },
+        {
+          "category" : "library",
+          "description" : "读取账号在站点保存的观看历史。",
+          "id" : "cloud_history",
+          "requiresAccount" : true,
+          "title" : "云端历史"
+        },
+        {
+          "category" : "reading",
+          "description" : "漫画详情、章节目录与在线图片阅读。",
+          "id" : "chapter_reading",
+          "title" : "在线章节阅读"
+        },
+        {
+          "category" : "reading",
+          "description" : "将章节下载到本地书架供离线阅读。",
+          "id" : "chapter_download",
+          "title" : "章节下载"
+        },
+        {
+          "category" : "account",
+          "description" : "实时读取账户身份与站点额度信息。",
+          "id" : "account_overview",
+          "requiresAccount" : true,
+          "title" : "账户资料与额度"
+        }
+      ],
       "id" : "copymanga",
       "imageRequestHeaders" : {
         "Referer" : "https://www.mangacopy.com/",
@@ -157,10 +268,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "0di6h2ExFM5wxkIOZmRS6GKycbUP9stlNu1DoJO1CCwtRPhZ9Z5QpmpawVds6F8+zlmoQVevuKdxptFni3sMAQ=="
+        "value" : "YrAkDT4P6D52/u2rD6CwQOPm4HC+IitwUN6fu7YCFTxY7GoEILKDF7hI8xsV3/YUxoLtLQsj5tDKKYQkKWoxCA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
-      "version" : "1.1.1"
+      "version" : "1.1.2"
     },
     {
       "allowedHosts" : [
@@ -211,6 +322,101 @@
       },
       "contentRating" : "adult",
       "fallbackBaseURL" : "https://e-hentai.org",
+      "features" : [
+        {
+          "category" : "discovery",
+          "description" : "热门、最新、高分推荐与多周期排行。",
+          "id" : "discovery_toplist",
+          "title" : "发现与排行榜"
+        },
+        {
+          "category" : "discovery",
+          "description" : "标签、上传者、分类、评分、页数和高级搜索条件。",
+          "id" : "advanced_search",
+          "title" : "高级搜索与筛选"
+        },
+        {
+          "category" : "library",
+          "description" : "浏览、搜索、排序十个站点收藏分类并编辑收藏备注。",
+          "id" : "favorites",
+          "requiresAccount" : true,
+          "title" : "收藏分类管理"
+        },
+        {
+          "category" : "library",
+          "description" : "查看 My Tags 所产生的个性化订阅流。",
+          "id" : "watched_feed",
+          "requiresAccount" : true,
+          "title" : "标签订阅流"
+        },
+        {
+          "category" : "interaction",
+          "description" : "读取画廊评论并在登录后发表评论。",
+          "id" : "comments",
+          "requiresAccount" : true,
+          "title" : "评论读写"
+        },
+        {
+          "category" : "interaction",
+          "description" : "查看画廊均分、票数与本人评分并提交星级。",
+          "id" : "ratings",
+          "requiresAccount" : true,
+          "title" : "画廊评分"
+        },
+        {
+          "category" : "interaction",
+          "description" : "添加、删除、编辑关注或隐藏标签及标签组。",
+          "id" : "my_tags",
+          "requiresAccount" : true,
+          "title" : "My Tags 管理"
+        },
+        {
+          "category" : "account",
+          "description" : "管理官网排除语言和排除上传者规则。",
+          "id" : "account_filters",
+          "requiresAccount" : true,
+          "title" : "账户内容过滤"
+        },
+        {
+          "category" : "discovery",
+          "description" : "浏览画廊种子与全站种子索引，支持状态和本人种子筛选。",
+          "id" : "torrents",
+          "title" : "画廊与全站种子"
+        },
+        {
+          "category" : "reading",
+          "description" : "读取原档与重采样选项、账户资金并提交官方打包请求。",
+          "id" : "archiver",
+          "requiresAccount" : true,
+          "title" : "Archiver 原档下载"
+        },
+        {
+          "category" : "reading",
+          "description" : "高清封面、批量解析图片与失败节点重试。",
+          "id" : "image_resolution",
+          "title" : "高清图片与重试"
+        },
+        {
+          "category" : "reading",
+          "description" : "在线流式阅读并支持章节下载到本地书架。",
+          "id" : "chapter_reading",
+          "title" : "在线阅读与下载"
+        },
+        {
+          "category" : "account",
+          "description" : "在 E-Hentai 外站与 ExHentai 里站之间切换。",
+          "id" : "site_switching",
+          "requiresAccount" : true,
+          "title" : "表站与里站"
+        },
+        {
+          "category" : "account",
+          "description" : "查看配额、积分、统计与账户资金概览。",
+          "id" : "account_overview",
+          "requiresAccount" : true,
+          "title" : "账户配额与统计"
+        }
+      ],
       "id" : "ehentai",
       "imageRequestHeaders" : {
         "Referer" : "https://e-hentai.org/",
@@ -271,10 +477,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "ZTxSMoYwPTBhFoRZLm9cOx+XDRCUUDuxuqyHgbXy0SqmJofSJQptHbRX7Xf+4jhJNyToSbsA/m4iWN0RnVhaAQ=="
+        "value" : "b+k8FzN6JmPeSQ7IPHHUiYuHeyHBkx0w2TgoEIfKcRHa8pCXMSqNqit9C1ghqb/vyFIx5zgJZRaU8dZzhdQbBA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
-      "version" : "1.1.1"
+      "version" : "1.1.2"
     },
     {
       "allowedHosts" : [
@@ -304,6 +510,72 @@
       },
       "contentRating" : "mature",
       "fallbackBaseURL" : "https://www.mangabz.com",
+      "features" : [
+        {
+          "category" : "discovery",
+          "description" : "首页、人气推荐、热度排行、编辑推荐与上升最快。",
+          "id" : "editorial_home",
+          "title" : "多栏目首页"
+        },
+        {
+          "category" : "discovery",
+          "description" : "题材、作者、地区、状态与关键词组合搜索。",
+          "id" : "search_filters",
+          "title" : "搜索与筛选"
+        },
+        {
+          "category" : "discovery",
+          "description" : "浏览站点热度排行榜。",
+          "id" : "toplist",
+          "title" : "排行榜"
+        },
+        {
+          "category" : "library",
+          "description" : "读取账号收藏、观看历史并进行站点侧搜索。",
+          "id" : "cloud_shelf",
+          "requiresAccount" : true,
+          "title" : "账号书架与历史"
+        },
+        {
+          "category" : "library",
+          "description" : "选择并批量删除官网收藏或历史记录。",
+          "id" : "batch_shelf_management",
+          "requiresAccount" : true,
+          "title" : "批量整理书架"
+        },
+        {
+          "category" : "interaction",
+          "description" : "在漫画详情中收藏或取消收藏。",
+          "id" : "favorite_mutation",
+          "requiresAccount" : true,
+          "title" : "站点收藏管理"
+        },
+        {
+          "category" : "reading",
+          "description" : "漫画详情、章节目录、批量取图与在线阅读。",
+          "id" : "chapter_reading",
+          "title" : "在线章节阅读"
+        },
+        {
+          "category" : "reading",
+          "description" : "将章节下载到本地书架供离线阅读。",
+          "id" : "chapter_download",
+          "title" : "章节下载"
+        },
+        {
+          "category" : "account",
+          "description" : "切换简繁内容、主站和备用线路。",
+          "id" : "language_mirrors",
+          "title" : "语言与线路切换"
+        },
+        {
+          "category" : "account",
+          "description" : "查看用户名、会员状态、收藏与历史数量。",
+          "id" : "account_overview",
+          "requiresAccount" : true,
+          "title" : "账户资料"
+        }
+      ],
       "id" : "mangabz",
       "imageRequestHeaders" : {
         "Referer" : "https://www.mangabz.com/",
@@ -369,10 +641,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "2EPRzYpYVoAxOVT1Dkx6ZCFag0Xx85eLYnRSi05eZnMCYkdPS4EHgrtJX/+I4Teyud1ZUYAQ4uFYuP/qdleEDQ=="
+        "value" : "02iLm25gwt2DOXHSxj61zjpzSBxvTFFAjYjRF8LnLttRyMWtWftuRXXrzas1K5xVAAGWbEgm3ceVw+08+x81Dw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
-      "version" : "1.1.1"
+      "version" : "1.1.2"
     }
   ]
 }

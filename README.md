@@ -32,15 +32,17 @@ https://raw.githubusercontent.com/jinjideweima/ComicReader-Sources/main/index.js
 
 Adding the repository only loads its signed index. ComicReader shows every
 plugin for review and requires a separate confirmation before installation.
+Each signed source also declares its complete user-visible feature catalogue,
+which ComicReader shows both during review and after installation.
 
 ## Included plugins
 
 | Plugin | ID | Rating | Declared capabilities |
 | --- | --- | --- | --- |
-| 包子漫画 | `baozi` | Mature | Browse/read, account or temporary shelf, add/remove shelf |
-| 拷贝漫画 | `copymanga` | Mature | Browse/read, profile-backed favorites/history, favorite mutations |
-| E-Hentai | `ehentai` | Adult | Browse/read, favorites/watched, ratings, comments, tags, archives/torrents |
-| MangaBZ | `mangabz` | Mature | Browse/read, favorites/history, shelf mutations |
+| 包子漫画 | `baozi` | Mature | Discovery/search, temporary or account shelf, favorites, reading/downloads |
+| 拷贝漫画 | `copymanga` | Mature | Discovery/topics/rankings, search, cloud favorites/history, reading/downloads |
+| E-Hentai | `ehentai` | Adult | Advanced search, favorites/watched, ratings, comments, tags, filters, archives/torrents |
+| MangaBZ | `mangabz` | Mature | Editorial home/search/rankings, favorites/history, batch shelf management, reading/downloads |
 
 Account features require a ComicReader build that supports signed declarative
 authentication manifests. Passwords are submitted by native code only for the
