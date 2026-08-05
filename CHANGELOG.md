@@ -5,6 +5,16 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade E-Hentai to 1.5.1: parse only explicit official filtered-result
+  sentences so total search counts cannot be reported as removed items.
+- Upgrade E-Hentai to 1.5.0: read actual `Obtained` Hath perks, enforce My Tags
+  hidden-tag filtering across home/popular/hero results with official bypass
+  metadata, add all seven official ranking families and four periods, and
+  verify real E-Hentai/ExHentai host switching.
+- Upgrade E-Hentai to 1.4.0: move bounties below torrents with a compact
+  localized preview, remove the low-value news surface, localize and redesign
+  Hentai@Home, donation, and Hath perk summaries, and align E-Hentai discovery
+  card corners with the other editorial sources.
 - Upgrade E-Hentai to 1.3.0: fix the website's inverse `ct_*` category flags,
   harden My Settings save/readback, refresh comments after server-side sort
   changes, expose official filter counts and temporary bypass links, and add

@@ -2544,10 +2544,11 @@
   function accountFilterListMetadata(doc) {
     if (!doc) return null;
     var text = cleanSnippetText(doc.text() || '');
-    var countMatch = text.match(/(?:custom\s+filters?|过滤器)[\s\S]{0,100}?(?:removed|移除|过滤)[^0-9]{0,30}([0-9][0-9,]*)/i) ||
-      text.match(/(?:removed|移除|过滤)[^0-9]{0,30}([0-9][0-9,]*)[^\n]{0,40}(?:galleries|results|图库|结果)/i) ||
-      text.match(/([0-9][0-9,]*)[^\n]{0,30}(?:galleries|results|图库|结果)[^\n]{0,40}(?:removed|filtered|移除|过滤)/i) ||
-      text.match(/(?:从页面|页面)[^0-9]{0,30}([0-9][0-9,]*)[^\n]{0,30}(?:结果|图库)/i);
+    // Only accept the site's explicit filtered-result sentence. Broad proximity
+    // matching used to confuse "2,237,843 results found" with the number removed.
+    var countMatch = text.match(/([0-9][0-9,]*)\s+(?:gallery|galleries|result|results)\s+(?:was|were)\s+filtered\s+from\s+(?:this|the)\s+page/i) ||
+      text.match(/已从(?:此|本)?页面过滤(?:掉)?\s*([0-9][0-9,]*)\s*个?(?:结果|图库)/i) ||
+      text.match(/(?:custom\s+filters?)\s+(?:removed|filtered)\s+([0-9][0-9,]*)\s+(?:gallery|galleries|result|results)/i);
     var metadata = {};
     if (countMatch) {
       metadata.filteredCount = String(parseInt(countMatch[1].replace(/,/g, ''), 10) || 0);
@@ -2567,6 +2568,45 @@
       metadata.filtersApplied = '1';
     }
     return Object.keys(metadata).length ? metadata : null;
+  }
+
+  // 官网会按 My Tags 的隐藏标签在服务端过滤列表。这里再按列表 HTML 已提供的标签做一次
+  // 同账号兜底：它不会扩大过滤范围，也不读取或返回标签明细；仅在官网列表因缓存、显示模式
+  // 或节点差异仍带回明确命中的项目时移除该项目。服务器已经过滤掉的内容不会被重复计数。
+  function applyHiddenMyTagsFallback(items, metadata) {
+    if (storage.get('account_logged_in') !== '1' || !items.length) {
+      return { items: items, metadata: metadata };
+    }
+    var state = null;
+    try {
+      state = fetchUserTagsState(null);
+    } catch (_) {
+      return { items: items, metadata: metadata };
+    }
+    if (!state || !state.isSupported) return { items: items, metadata: metadata };
+    var hidden = {};
+    (state.tags || []).forEach(function (tag) {
+      if (!tag.isHidden) return;
+      var key = canonicalTag(tag.rawTag);
+      if (key) hidden[key] = true;
+    });
+    var hiddenCount = Object.keys(hidden).length;
+    if (!hiddenCount) return { items: items, metadata: metadata };
+
+    var removed = 0;
+    var filtered = items.filter(function (item) {
+      var matched = (item.tags || []).some(function (tag) { return !!hidden[canonicalTag(tag)]; });
+      if (matched) removed += 1;
+      return !matched;
+    });
+    metadata = metadata || {};
+    metadata.hiddenMyTagsCount = String(hiddenCount);
+    metadata.filtersApplied = '1';
+    if (removed > 0) {
+      var serverCount = parseInt(metadata.filteredCount || '0', 10) || 0;
+      metadata.filteredCount = String(serverCount + removed);
+    }
+    return { items: filtered, metadata: metadata };
   }
 
   function mergeMetadata(target, incoming) {
@@ -2593,11 +2633,11 @@
 
   function toplistLabel(period) {
     switch (String(period || '11')) {
-      case '12': return '年榜';
-      case '13': return '月榜';
-      case '15': return '昨日榜';
+      case '12': return '图库年排行';
+      case '13': return '图库月排行';
+      case '15': return '图库日排行';
       case '11':
-      default: return '总榜';
+      default: return '图库总排行';
     }
   }
 
@@ -2740,6 +2780,9 @@
     if (hasNext) storage.set(transientKey('next:' + ctx + ':' + (page + 1)), nextHref);
     var result = { items: items, hasNextPage: hasNext };
     result.metadata = mergeMetadata(result.metadata, accountFilterListMetadata(doc));
+    var myTagsFiltered = applyHiddenMyTagsFallback(result.items, result.metadata);
+    result.items = myTagsFiltered.items;
+    result.metadata = myTagsFiltered.metadata;
     if (ctx.indexOf('favorites:') === 0) result.metadata = mergeMetadata(result.metadata, favoriteCategoriesMetadata(doc));
     if (page === 1 && ctx.indexOf('watched:') === 0) {
       var watchedState = fetchUserTagsState(null);
@@ -2773,6 +2816,98 @@
       nextHref = a.attr('href') || '';
     });
     return { items: items, hasNextPage: !!(nextHref && items.length > 0) };
+  }
+
+  var TOPLIST_KINDS = {
+    gallery: { digit: '1', title: '图库排行' },
+    uploader: { digit: '2', title: '上传排行' },
+    tagger: { digit: '3', title: '标签排行' },
+    hath: { digit: '4', title: 'Hentai@Home 排行' },
+    torrent: { digit: '5', title: '做种排行' },
+    cleanup: { digit: '6', title: '清理排行' },
+    rating: { digit: '7', title: '评分与评论排行' }
+  };
+  var TOPLIST_PERIODS = {
+    total: { digit: '1', title: '总排行' },
+    year: { digit: '2', title: '年排行' },
+    month: { digit: '3', title: '月排行' },
+    day: { digit: '5', title: '日排行' }
+  };
+
+  function rankingSafeURL(raw) {
+    var value = String(raw || '').trim();
+    if (value.indexOf('/') === 0) value = toplistSite() + value;
+    return /^https:\/\/e-hentai\.org\//i.test(value) ? value : null;
+  }
+
+  function rankingPage(page, kind, period) {
+    kind = TOPLIST_KINDS[kind] ? kind : 'gallery';
+    period = TOPLIST_PERIODS[period] ? period : 'total';
+    var kindInfo = TOPLIST_KINDS[kind];
+    var periodInfo = TOPLIST_PERIODS[period];
+    var tl = kindInfo.digit + periodInfo.digit;
+    var p = Math.max(1, parseInt(page, 10) || 1);
+    var url = toplistSite() + '/toplist.php?tl=' + tl;
+    if (p > 1) url += '&p=' + (p - 1);
+    var res = fetch(url, listHeaders());
+    var doc = parseHTML(res.body || '', toplistSite());
+    var entries = [];
+
+    if (kind === 'gallery') {
+      parseList(doc).forEach(function (manga, index) {
+        var info = manga.info || {};
+        entries.push({
+          id: kind + ':' + period + ':' + manga.id,
+          rank: info.rank || ('#' + ((p - 1) * 25 + index + 1)),
+          score: info.score || '',
+          title: manga.title,
+          subtitle: info.uploader || null,
+          url: manga.url,
+          manga: manga
+        });
+      });
+    } else {
+      doc.select('tr').forEach(function (row) {
+        var cells = row.select('td');
+        if (cells.length < 3) return;
+        for (var offset = 0; offset + 2 < cells.length; offset += 3) {
+          var rank = cleanSnippetText(cells[offset].text() || '');
+          if (!/^#[0-9][0-9,]*$/.test(rank)) continue;
+          var score = cleanSnippetText(cells[offset + 1].text() || '');
+          var subjectCell = cells[offset + 2];
+          var title = cleanSnippetText(subjectCell.text() || '');
+          if (!title) continue;
+          var link = subjectCell.selectFirst('a[href]');
+          var entryURL = link ? rankingSafeURL(link.attr('abs:href') || link.attr('href') || '') : null;
+          entries.push({
+            id: kind + ':' + period + ':' + p + ':' + rank.replace(/[^0-9]/g, ''),
+            rank: rank,
+            score: score,
+            title: title,
+            subtitle: kindInfo.title,
+            url: entryURL,
+            manga: null
+          });
+        }
+      });
+      entries.sort(function (a, b) {
+        return parseInt(a.rank.replace(/[^0-9]/g, ''), 10) - parseInt(b.rank.replace(/[^0-9]/g, ''), 10);
+      });
+    }
+
+    var hasNext = false;
+    doc.select('table.ptt a, table.ptb a').forEach(function (anchor) {
+      if (cleanSnippetText(anchor.text() || '') === '>') hasNext = true;
+    });
+    return {
+      isSupported: true,
+      title: kindInfo.title.replace(/排行$/, '') + periodInfo.title,
+      kind: kind,
+      period: period,
+      entries: entries,
+      hasNextPage: hasNext && entries.length > 0,
+      message: entries.length ? null : '官网暂未返回此排行的数据。'
+    };
   }
 
   // 画廊页/查看页里所有 /s/<key>/<gid>-<n> 查看页链接。
@@ -3248,45 +3383,282 @@
 
   function parseHentaiAtHomeState(page) {
     if (page.loggedOut) return { isSupported: false, title: 'Hentai@Home', sections: [], links: [], message: '请先登录 E-Hentai 账号。' };
-    var sections = genericReadOnlyTableSections(page.doc, 'hah', 40);
+    var sections = [];
+    var regionNames = {
+      'North and South America': '北美洲和南美洲',
+      'Europe and Africa': '欧洲和非洲',
+      'Asia and Oceania': '亚洲和大洋洲',
+      'Chinese Dominion': '中国大陆',
+      'Global': '全球'
+    };
+    page.doc.select('table').forEach(function (table) {
+      var header = cleanSnippetText((table.selectFirst('tr') || table).text() || '');
+      if (!/H@H\s*Region|H@H\s*地区/i.test(header)) return;
+      table.select('tr').forEach(function (row, index) {
+        if (index === 0) return;
+        var cells = row.select('td');
+        var values = [];
+        cells.forEach(function (cell) {
+          var value = cleanSnippetText(cell.text() || '');
+          if (value) values.push(value);
+        });
+        if (values.length < 5) return;
+        var quality = values.pop();
+        var hitsPerGB = values.pop();
+        var hitsPerSecond = values.pop();
+        var region = values.shift();
+        var load = values.filter(function (value) { return value !== '='; }).join(' ≈ ');
+        var metrics = [
+          accountMetric('hah_region_' + index + '_load', '当前网络负载', load),
+          accountMetric('hah_region_' + index + '_hits_second', '命中/秒', hitsPerSecond),
+          accountMetric('hah_region_' + index + '_hits_gb', '命中/GB', hitsPerGB),
+          accountMetric('hah_region_' + index + '_quality', '质量', quality)
+        ].filter(function (metric) { return !!metric; });
+        if (metrics.length) sections.push({
+          id: 'hah_region_' + index,
+          title: regionNames[region] || region,
+          metrics: metrics
+        });
+      });
+    });
+
+    page.doc.select('table').forEach(function (table, tableIndex) {
+      var headerCells = table.select('th');
+      var headers = [];
+      headerCells.forEach(function (cell) { headers.push(cleanSnippetText(cell.text() || '')); });
+      if (!headers.some(function (value) { return /Client|客户端/i.test(value); }) ||
+          !headers.some(function (value) { return /Status|状态/i.test(value); })) return;
+      var labels = {
+        Client: '客户端', Status: '状态', Created: '创建于', 'Last Seen': '最后在线',
+        'Files Served': '提供的文件', Port: '端口', Version: '版本', 'Max Speed': '最大速度',
+        Trust: '信任', Hitrate: '命中率', Hathrate: 'Hath 产出率', Country: '国家/地区'
+      };
+      table.select('tr').forEach(function (row, rowIndex) {
+        if (rowIndex === 0) return;
+        var cells = row.select('td');
+        if (!cells.length) return;
+        var metrics = [];
+        cells.forEach(function (cell, cellIndex) {
+          var label = headers[cellIndex] || ('信息 ' + (cellIndex + 1));
+          if (/Client\s*IP|Key|客户端\s*IP|密钥/i.test(label)) return;
+          metrics.push(accountMetric(
+            'hah_client_' + tableIndex + '_' + rowIndex + '_' + cellIndex,
+            labels[label] || label,
+            cleanSnippetText(cell.text() || '').replace(/^Online$/i, '在线').replace(/^Offline$/i, '离线')
+          ));
+        });
+        metrics = metrics.filter(function (metric) { return !!metric; });
+        if (metrics.length) sections.push({
+          id: 'hah_client_' + tableIndex + '_' + rowIndex,
+          title: '我的 H@H 客户端',
+          metrics: metrics
+        });
+      });
+    });
+
     var links = [];
     page.doc.select('a[href]').forEach(function (anchor, index) {
       var label = cleanSnippetText(anchor.text() || '');
-      if (!/Hentai@Home\s*[0-9]|客户端下载|Download.*Client/i.test(label)) return;
+      if (!/Hentai@Home\s*[0-9]|Source\s*Code|源代码|客户端下载|Download.*Client/i.test(label)) return;
       var url = safeReadOnlyLink(anchor.attr('abs:href') || anchor.attr('href') || '');
-      if (url) links.push({ id: 'hah_download_' + index, title: label || '下载 Hentai@Home 客户端', url: url });
+      if (url) links.push({
+        id: 'hah_download_' + index,
+        title: /Source\s*Code|源代码/i.test(label) ? '下载源代码' : ('下载 ' + (label || 'Hentai@Home 客户端')),
+        url: url
+      });
     });
     return {
       isSupported: true,
       title: 'Hentai@Home',
+      introduction: 'Hentai@Home 通过用户运行的客户端为图库分发图片。命中/GB 越高，表示该地区相对于可用缓存空间的客户端需求越高。新客户端通常需要至少 80 Mbps 的上传与下载速度，并保持长期在线。',
       sections: sections,
       links: links,
-      message: sections.length ? null : '当前账号没有可显示的 H@H 客户端状态。'
+      message: sections.length ? null : '官网暂未返回可识别的 H@H 区域或客户端状态。'
     };
+  }
+
+  function donationTierForTotal(totalText) {
+    var value = parseFloat(String(totalText || '').replace(/[^0-9.]/g, '')) || 0;
+    if (value >= 1000) return '荣誉猫娘';
+    if (value >= 750) return '七星';
+    if (value >= 500) return '五星';
+    if (value >= 250) return '三星';
+    if (value >= 100) return '金星';
+    if (value >= 50) return '银星';
+    if (value >= 20) return '铜星';
+    return '无';
+  }
+
+  function donationRecordSections(fragment, prefix, titlePrefix, labels) {
+    if (!fragment) return [];
+    var doc = parseHTML('<table>' + fragment + '</table>', accountSettingsSite());
+    var sections = [];
+    doc.select('tr').forEach(function (row, rowIndex) {
+      if (sections.length >= 10) return;
+      var cells = row.select('td');
+      var values = [];
+      cells.forEach(function (cell) {
+        var value = cleanSnippetText(cell.text() || '');
+        if (value) values.push(value);
+      });
+      if (!values.length || /No coins|No slots|近期没有/i.test(values.join(' '))) return;
+      var metrics = [];
+      values.forEach(function (value, index) {
+        value = value.replace(/^Refunded\s+(.+?)\s+Hath$/i, '已退还 $1 Hath')
+          .replace(/^\$(.+?)\s+Donation$/i, '捐赠 $$$1');
+        metrics.push(accountMetric(prefix + '_' + rowIndex + '_' + index, labels[index] || ('信息 ' + (index + 1)), value));
+      });
+      metrics = metrics.filter(function (metric) { return !!metric; });
+      if (metrics.length) sections.push({ id: prefix + '_' + rowIndex, title: titlePrefix + ' ' + (sections.length + 1), metrics: metrics });
+    });
+    return sections;
   }
 
   function parseDonationSummary(page) {
     if (page.loggedOut) return { isSupported: false, title: '捐赠', sections: [], links: [], message: '请先登录 E-Hentai 账号。' };
     var text = cleanSnippetText(page.body || '');
-    var metrics = [];
-    var confirmed = firstMatch(text, /(?:Confirmed|已确认)\s*[:：]?\s*([^\s]+(?:\s*(?:BTC|BCH|USD|\$))?)/i);
-    var pending = firstMatch(text, /(?:Pending|待定)\s*[:：]?\s*([^\s]+(?:\s*(?:BTC|BCH|USD|\$))?)/i);
-    var level = firstMatch(text, /(?:Donation\s+Level|捐赠等级)\s*[:：]?\s*([A-Za-z\u4e00-\u9fff][A-Za-z\u4e00-\u9fff ]{0,30}?)(?=\s+(?:Confirmed|Pending|已确认|待定)\b|$)/i);
-    if (level) metrics.push(accountMetric('donation_level', '捐赠等级', level));
-    if (confirmed) metrics.push(accountMetric('donation_confirmed', '已确认', confirmed));
-    if (pending) metrics.push(accountMetric('donation_pending', '待定', pending));
+    var unspent = firstMatch(text, /(?:Unspent|未使用)\s*[:：]\s*([0-9.,]+\s*(?:BTC|BCH))/i);
+    var total = firstMatch(text, /(?:Total\s+All-Time\s+Donations|捐赠总额)\s*[:：]\s*(\$?\s*[0-9.,]+)/i);
+    var adoptedDays = firstMatch(text, /(?:Total\s+Adopt-a-Server\s+Days|领养服务器天数)\s*[:：]\s*([0-9,]+)/i);
+    var rate = firstMatch(text, /(?:Current\s+Conversion\s+Rate|当前汇率)\s*[:：]\s*([0-9.,]+\s*(?:BTC|BCH)\s*=\s*[0-9.,]+\s*USD)/i);
+    if (!rate) rate = firstMatch(text, /([0-9.,]+\s*(?:BTC|BCH)\s*=\s*[0-9.,]+\s*USD)/i);
+    var explicitLevel = firstMatch(text, /(?:Donation\s+Level|捐赠等级)\s*[:：]\s*(None|Bronze\s+Star|Silver\s+Star|Gold\s+Star|Tri\s+Star|Quint\s+Star|Septua\s+Star|Honorary\s+Catgirl|无|铜星|银星|金星|三星|五星|七星|荣誉猫娘)/i);
+    var levelNames = {
+      None: '无', 'Bronze Star': '铜星', 'Silver Star': '银星', 'Gold Star': '金星',
+      'Tri Star': '三星', 'Quint Star': '五星', 'Septua Star': '七星', 'Honorary Catgirl': '荣誉猫娘'
+    };
+    var level = levelNames[explicitLevel] || explicitLevel || donationTierForTotal(total);
+    var summaryMetrics = [
+      accountMetric('donation_unspent', '未使用', unspent || '0'),
+      accountMetric('donation_total', '捐赠总额', total || '$0'),
+      accountMetric('donation_adopted_days', '领养服务器天数', adoptedDays || '0'),
+      accountMetric('donation_rate', '当前汇率', rate),
+      accountMetric('donation_level', '捐赠等级', level)
+    ].filter(function (metric) { return !!metric; });
+    var sections = [{ id: 'donation_summary', title: '捐赠概况', metrics: summaryMetrics }];
+
+    var transactionMetrics = [];
+    page.doc.select('table').forEach(function (table) {
+      table.select('tr').forEach(function (row, rowIndex) {
+        if (transactionMetrics.length >= 6) return;
+        var cells = row.select('td');
+        var values = [];
+        cells.forEach(function (cell) {
+          var value = cleanSnippetText(cell.text() || '');
+          if (value) values.push(value);
+        });
+        var status = values.length ? values[values.length - 1] : '';
+        if (!/Pending|Confirmed|待定|已确认/i.test(status)) return;
+        transactionMetrics.push(accountMetric(
+          'donation_transaction_' + rowIndex,
+          values[0] || ('记录 ' + (transactionMetrics.length + 1)),
+          values.slice(1).join(' · ').replace(/Pending/ig, '待定').replace(/Confirmed/ig, '已确认')
+        ));
+      });
+    });
+    transactionMetrics = transactionMetrics.filter(function (metric) { return !!metric; });
+    if (!transactionMetrics.length) transactionMetrics.push(accountMetric('donation_transactions_empty', '状态', '近期没有待处理或已确认的捐赠'));
+    sections.push({ id: 'donation_transactions', title: '近期捐赠状态', metrics: transactionMetrics });
+
+    var spendingStart = page.body.search(/Recent\s+Spending\s+History|近期消费记录/i);
+    var slotsStart = page.body.search(/Active\s*\+\s*Recent\s+Adopt-a-Server\s+Slots|近期服务器领养记录/i);
+    var spendingFragment = spendingStart >= 0 ? page.body.slice(spendingStart, slotsStart > spendingStart ? slotsStart : page.body.length) : '';
+    var slotsFragment = slotsStart >= 0 ? page.body.slice(slotsStart) : '';
+    var spendingSections = donationRecordSections(spendingFragment, 'donation_spending', '消费记录', ['时间', '数量', '用途']);
+    var slotSections = donationRecordSections(slotsFragment, 'donation_slots', '服务器领养', ['时间', '时长', '状态']);
+    sections = sections.concat(spendingSections.length ? spendingSections : [{
+      id: 'donation_spending_empty', title: '近期消费记录', metrics: [accountMetric('donation_spending_empty_state', '状态', '近期没有消费记录')]
+    }]);
+    sections = sections.concat(slotSections.length ? slotSections : [{
+      id: 'donation_slots_empty', title: '近期服务器领养记录', metrics: [accountMetric('donation_slots_empty_state', '状态', '近期没有领养服务器')]
+    }]);
     return {
       isSupported: true,
       title: '捐赠',
-      sections: metrics.length ? [{ id: 'donation_summary', title: '只读概况', metrics: metrics }] : [],
+      introduction: '比特币和比特币现金是去中心化虚拟货币。官网允许把已确认的捐赠按当前站点汇率计为美元捐赠，或用于领养服务器。App 仅展示只读状态，不接收付款，也不会返回钱包地址。',
+      sections: sections,
       links: [{ id: 'donation_official', title: '在官网查看捐赠页面', url: accountSettingsSite() + '/bitcoin.php' }],
-      message: metrics.length ? null : '为保护付款信息，App 只展示官网可识别的捐赠概况。'
+      message: null
     };
   }
 
+  var HATH_PERK_NAMES_ZH = {
+    'Ads-Be-Gone': '广告不见了', 'Source Nexus': '原始之力', 'Multi-Page Viewer': '多页查看器',
+    'More Thumbs': '更多缩略图', 'Thumbs Up': '超多缩略图', 'All Thumbs': '全部缩略图',
+    'More Pages': '更多页面', 'Lots of Pages': '超多页面', 'Too Many Pages': '全部页面',
+    'More Favorite Notes I': '更多收藏备注 I', 'More Favorite Notes II': '更多收藏备注 II',
+    'Paging Enlargement I': '页面扩大 I', 'Paging Enlargement II': '页面扩大 II',
+    'Postage Paid': '邮费已付', 'Vigorous Vitality': '生机勃勃', 'Effluent Ether': '溢流以太',
+    'Suffusive Spirit': '心灵坚强', 'Resplendent Regeneration': '辉煌再起', 'Enigma Energizer': '谜之劲量',
+    'Yakety Sax': '叶克蒂·萨克斯', 'Soul Catcher': '灵魂捕手', 'Extra Strength Formula': '特强配方',
+    "That's Good Eatin'": '这倒是挺好吃的！', 'Coupon Clipper': '食利者', 'Long Gone Before Daylight': '黎明之前',
+    'Dark Descent': '黑暗后裔', 'Eminent Elementalist': '元素大师', 'Divine Warmage': '圣战法师',
+    'Death and Decay': '死亡凋零', 'Evil Enchantress': '邪恶的女巫', 'Force of Nature': '大自然的力量',
+    'Manehattan Project': '曼哈顿计划', 'Follower of Snowflake': '雪花的信徒',
+    'Limit Breaker I': '突破极限 I', 'Limit Breaker II': '突破极限 II', 'Limit Breaker III': '突破极限 III',
+    'Limit Breaker IV': '突破极限 IV', 'Limit Breaker V': '突破极限 V', 'Thinking Cap': '深思',
+    'Mentats': '晶算师', 'Learning Chip': '学习晶片', 'Cybernetic Implants': '神经植入物',
+    'Innate Arcana I': '天赋奥术 I', 'Innate Arcana II': '天赋奥术 II', 'Innate Arcana III': '天赋奥术 III',
+    'Innate Arcana IV': '天赋奥术 IV', 'Innate Arcana V': '天赋奥术 V',
+    'Crystarium I': '水晶矿脉 I', 'Crystarium II': '水晶矿脉 II', 'Crystarium III': '水晶矿脉 III',
+    'Crystarium IV': '水晶矿脉 IV', 'Crystarium V': '水晶矿脉 V',
+    'Tokenizer I': '令牌技师 I', 'Tokenizer II': '令牌技师 II', 'Tokenizer III': '令牌技师 III',
+    'Hoarder I': '囤积者 I', 'Hoarder II': '囤积者 II', 'Hoarder III': '囤积者 III',
+    'Hoarder IV': '囤积者 IV', 'Hoarder V': '囤积者 V',
+    'Repair Bear Mk.1': '修理熊 Mk.1', 'Repair Bear Mk.2': '修理熊 Mk.2',
+    'Repair Bear Mk.3': '修理熊 Mk.3', 'Repair Bear Mk.4': '修理熊 Mk.4',
+    'Dæmon Duality I': '双重守护精灵 I', 'Dæmon Duality II': '双重守护精灵 II',
+    'Dæmon Duality III': '双重守护精灵 III', 'Dæmon Duality IV': '双重守护精灵 IV',
+    'Dæmon Duality V': '双重守护精灵 V', 'Dæmon Duality VI': '双重守护精灵 VI',
+    'Dæmon Duality VII': '双重守护精灵 VII', 'Dæmon Duality VIII': '双重守护精灵 VIII',
+    'Dæmon Duality IX': '双重守护精灵 IX'
+  };
+
+  var HATH_PERK_DESCRIPTIONS_ZH = {
+    'Ads-Be-Gone': '让广告消失。',
+    'Source Nexus': '解锁 E-Hentai 图库的原始图像功能，可直接浏览大部分图像的原始非重采样版本。',
+    'Multi-Page Viewer': '解锁 E-Hentai 图库的多页查看器，可在单个网页中查看图库全部图像。',
+    'More Thumbs': '将网页最大缩略图行数增加到 8。', 'Thumbs Up': '将网页最大缩略图行数增加到 20。',
+    'All Thumbs': '将网页最大缩略图行数增加到 40。', 'More Pages': '将图像浏览限制提高到原来的 2 倍。',
+    'Lots of Pages': '将图像浏览限制提高到原来的 5 倍。', 'Too Many Pages': '将图像浏览限制提高到原来的 10 倍。',
+    'More Favorite Notes I': '将收藏备注限制增加到 10,000。', 'More Favorite Notes II': '将收藏备注限制增加到 25,000。',
+    'Paging Enlargement I': '将索引、搜索和种子页面的每页结果数提高到 50。',
+    'Paging Enlargement II': '将索引、搜索和种子页面的每页结果数提高到 100。',
+    'Postage Paid': '使用莫古利邮局时免收邮费和货到付款手续费。',
+    'Vigorous Vitality': '基础生命值提高 10%。', 'Effluent Ether': '基础魔力值提高 10%。',
+    'Suffusive Spirit': '基础灵力值提高 10%。', 'Resplendent Regeneration': '战斗中的再生能力提高 50%。',
+    'Enigma Energizer': '御谜士奖励加倍，并将持续时间增加到 50 回合。', 'Yakety Sax': '逃跑时不会被怪物抓到。',
+    'Soul Catcher': '每天获得十片免费灵魂碎片；最近 30 天内开启过 HentaiVerse 时会自动发放。',
+    'Extra Strength Formula': '快乐药丸恢复怪物士气的效果加倍。', "That's Good Eatin'": '怪物食物的饱足恢复量提高 20%。',
+    'Coupon Clipper': '道具店内所有购物享 9 折。', 'Long Gone Before Daylight': '每天使用的第一瓶能量饮料恢复双倍体力。',
+    'Dark Descent': '提高高级竞技场掉落的世界种子数量。', 'Eminent Elementalist': '基础元素魔法熟练度的 10% 计入有效熟练度。',
+    'Divine Warmage': '基础神圣魔法熟练度的 10% 计入有效熟练度。', 'Death and Decay': '基础黑暗魔法熟练度的 10% 计入有效熟练度。',
+    'Evil Enchantress': '基础减益魔法熟练度的 10% 计入有效熟练度。', 'Force of Nature': '基础增益魔法熟练度的 10% 计入有效熟练度。',
+    'Manehattan Project': '大幅提升「友情小马炮」的伤害。', 'Follower of Snowflake': '宣示对战利品与收获女神雪花的坚定信仰。',
+    'Thinking Cap': '所有经验值获取提高 25%，并入 HentaiVerse 训练奖励计算。', 'Mentats': '经验值奖励提高到 50%。',
+    'Learning Chip': '经验值奖励提高到 75%。', 'Cybernetic Implants': '经验值奖励提高到 100%。'
+  };
+
+  function localizedPerkDescription(name) {
+    if (HATH_PERK_DESCRIPTIONS_ZH[name]) return HATH_PERK_DESCRIPTIONS_ZH[name];
+    var number = parseInt(firstMatch(name, /([0-9]+)/) || '0', 10);
+    if (/^Limit Breaker/.test(name)) return '将装备属性融合上限提高到 ' + (200 + number * 10) + '。';
+    if (/^Innate Arcana/.test(name)) return '维持自动施法所需的魔力减少 ' + (number * 10) + '%。';
+    if (/^Crystarium/.test(name)) return number === 1 ? '怪物掉落水晶时额外获得一颗奖励水晶。' : '将每次水晶掉落数量进一步提高到 ' + ([0, 0, 3, 5, 7, 10][number]) + ' 倍。';
+    if (/^Tokenizer/.test(name)) return '将随机怪物令牌掉落率提高到 ' + ([0, 2, 3, 4][number]) + ' 倍。';
+    if (/^Hoarder/.test(name)) return number === 1 ? '仓库中的前 200 件装备不计入装备数量限制。' : '将装备数量限制增加到 ' + (number * 200) + '。';
+    if (/^Repair Bear Mk\./.test(name)) return [null, '有效装备耗损减半。', '有效装备耗损降低到正常值的 25%。', '有效装备耗损降低到正常值的 10%。', '完全消除装备耗损，并将战败时的耐久损失减半。'][number];
+    if (/^Dæmon Duality/.test(name)) return '攻击伤害与魔法伤害各提高 ' + (number * 5 + 5) + '%。';
+    return '官网尚未提供可识别的中文说明。';
+  }
+
   function parseHathPerksState(page) {
-    if (page.loggedOut) return { isSupported: false, title: 'Hath Perks', sections: [], links: [], message: '请先登录 E-Hentai 账号。' };
+    if (page.loggedOut) return { isSupported: false, title: 'Hath 权益', sections: [], links: [], message: '请先登录 E-Hentai 账号。' };
     var sections = [];
+    var currentHath = firstMatch(cleanSnippetText(page.body || ''), /(?:You\s+currently\s+have|您现在拥有)\s*([0-9,]+)\s*Hath/i);
+    if (currentHath) sections.push({
+      id: 'hath_balance', title: '账户 Hath', metrics: [accountMetric('hath_balance_value', '当前拥有', currentHath + ' Hath')]
+    });
     page.doc.select('table tr').forEach(function (row, index) {
       var cells = row.select('td');
       if (cells.length < 3) return;
@@ -3295,45 +3667,23 @@
       var purchase = cleanSnippetText(cells[2].text() || '');
       if (!name || !description) return;
       var cost = firstMatch(purchase, /([0-9,]+\s*Hath)/i);
-      var owned = /Owned|已获得|Acquired/i.test(purchase);
+      var owned = /Owned|Obtained|已获得|Acquired|Activated/i.test(purchase);
       var metrics = [accountMetric('perk_' + index + '_state', '状态', owned ? '已获得' : '未获得')];
       if (cost) metrics.push(accountMetric('perk_' + index + '_cost', '所需 Hath', cost));
-      metrics.push(accountMetric('perk_' + index + '_description', '说明', description));
-      sections.push({ id: 'perk_' + index, title: name, metrics: metrics.filter(function (metric) { return !!metric; }) });
+      var donationUnlock = firstMatch(description, /Free\s+with\s+a\s+(\$[0-9,]+)\s+donation/i);
+      var localizedDescription = localizedPerkDescription(name);
+      if (donationUnlock) localizedDescription += ' 捐赠 ' + donationUnlock + ' 可免费解锁。';
+      metrics.push(accountMetric('perk_' + index + '_description', '说明', localizedDescription));
+      sections.push({ id: 'perk_' + index, title: HATH_PERK_NAMES_ZH[name] || name, metrics: metrics.filter(function (metric) { return !!metric; }) });
     });
     return {
       isSupported: true,
-      title: 'Hath Perks',
+      title: 'Hath 权益',
+      introduction: '运行 Hentai@Home 客户端会随时间获得 Hath。Hath 可在官网兑换图库与 HentaiVerse 权益；此页面仅显示余额、权益状态与用途，不会在 App 内执行购买。',
       sections: sections,
-      links: [{ id: 'perks_official', title: '在官网查看 Hath Perks', url: accountSettingsSite() + '/hathperks.php' }],
-      message: sections.length ? null : '官网暂未返回可识别的 Hath Perks。'
+      links: [{ id: 'perks_official', title: '在官网查看 Hath 权益', url: accountSettingsSite() + '/hathperks.php' }],
+      message: sections.length ? null : '官网暂未返回可识别的 Hath 权益。'
     };
-  }
-
-  function parseNewsState(body) {
-    var doc = parseHTML(body || '', accountSettingsSite() + '/news.php');
-    var items = [];
-    doc.select('table tr').forEach(function (row, index) {
-      var cells = row.select('th, td');
-      if (cells.length < 2) return;
-      var first = cleanSnippetText(cells[0].text() || '');
-      var rest = [];
-      for (var i = 1; i < cells.length; i++) {
-        var value = cleanSnippetText(cells[i].text() || '');
-        if (value) rest.push(value);
-      }
-      if (!first || !rest.length) return;
-      var anchor = row.selectFirst('a[href]');
-      var url = anchor ? safeReadOnlyLink(anchor.attr('abs:href') || anchor.attr('href') || '') : null;
-      items.push({ id: 'news_row_' + index, title: first, dateText: first, body: rest.join('\n'), url: url });
-    });
-    if (!items.length) {
-      doc.select('h1, h2').forEach(function (heading, index) {
-        var title = cleanSnippetText(heading.text() || '');
-        if (title) items.push({ id: 'news_heading_' + index, title: title, dateText: null, body: '', url: null });
-      });
-    }
-    return { isSupported: items.length > 0, items: items, message: items.length ? null : '官网暂未返回新闻内容。' };
   }
 
   function bountySelectValue(doc, name, semantic) {
@@ -3379,7 +3729,22 @@
     return accountSettingsSite() + '/bounty.php' + (parts.length ? '?' + parts.join('&') : '');
   }
 
-  function parseBountyRow(row) {
+  function localizedBountyType(value) {
+    var normalized = cleanSnippetText(value || '');
+    return normalized.replace(/^Standard$/i, '标准').replace(/^Translation$/i, '翻译').replace(/^Editing$/i, '编辑');
+  }
+
+  function localizedBountyStatus(value) {
+    var normalized = cleanSnippetText(value || '');
+    var values = {
+      'open/new': '开放/新创建', 'open/accepted': '开放/已接受',
+      'closed/reserved': '关闭/已保留', 'closed/claimed': '关闭/已认领',
+      'closed/completed': '关闭/已完成'
+    };
+    return values[normalized.toLowerCase()] || normalized;
+  }
+
+  function parseBountyRow(row, columns) {
     var anchor = row.selectFirst('a[href*="bounty.php?"][href*="bid="]');
     if (!anchor) return null;
     var href = safeReadOnlyLink(anchor.attr('abs:href') || anchor.attr('href') || '');
@@ -3391,15 +3756,21 @@
     cells.forEach(function (cell) { values.push(cleanSnippetText(cell.text() || '')); });
     var rowText = values.join(' · ');
     var posterAnchor = row.selectFirst('a[href*="bounty.php?u="]');
+    function columnValue(name) {
+      var index = columns && columns[name];
+      return index != null && index >= 0 && index < values.length ? values[index] : null;
+    }
+    var type = columnValue('type') || firstMatch(rowText, /\b(Standard|Translation|Editing|标准|翻译|编辑)\b/i);
+    var status = columnValue('status') || firstMatch(rowText, /\b(Open\/[A-Za-z]+|Closed\/[A-Za-z]+|开放[^·]*|关闭[^·]*|已完成|已保留|已认领)\b/i);
     return {
       id: idMatch[1],
       url: href,
       title: cleanSnippetText(anchor.text() || '') || ('悬赏 #' + idMatch[1]),
-      type: firstMatch(rowText, /\b(Standard|Translation|Editing|标准|翻译|编辑)\b/i),
-      status: firstMatch(rowText, /\b(Open\/[A-Za-z]+|Closed\/[A-Za-z]+|开放[^·]*|关闭[^·]*|已完成|已保留|已认领)\b/i),
-      reward: firstMatch(rowText, /([0-9,]+\s*(?:Credits?|C|Hath)(?:\s*\+\s*[0-9,]+\s*Hath)?)/i),
-      postedBy: posterAnchor ? cleanSnippetText(posterAnchor.text() || '') : null,
-      dateText: values.length ? values[0] : null,
+      type: localizedBountyType(type),
+      status: localizedBountyStatus(status),
+      reward: columnValue('reward') || firstMatch(rowText, /([0-9,]+\s*(?:Credits?|C|Hath)(?:\s*\+\s*[0-9,]+\s*Hath)?)/i),
+      postedBy: columnValue('poster') || (posterAnchor ? cleanSnippetText(posterAnchor.text() || '') : null),
+      dateText: columnValue('date') || (values.length ? values[0] : null),
       summary: rowText || null
     };
   }
@@ -3410,9 +3781,21 @@
       return { items: [], hasNextPage: false, metadata: { message: '请先登录 E-Hentai 账号。' } };
     }
     var items = [];
-    doc.select('table.itg tr, table tr').forEach(function (row) {
-      var bounty = parseBountyRow(row);
-      if (bounty && !items.some(function (item) { return item.id === bounty.id; })) items.push(bounty);
+    doc.select('table.itg, table').forEach(function (table) {
+      var columns = {};
+      var heading = table.selectFirst('tr');
+      if (heading) heading.select('th, td').forEach(function (cell, index) {
+        var value = cleanSnippetText(cell.text() || '');
+        if (/Last\s+Updated|最后更新/i.test(value)) columns.date = index;
+        else if (/Bounty\s+Type|悬赏类型/i.test(value)) columns.type = index;
+        else if (/Bounty\s+Status|悬赏状态/i.test(value)) columns.status = index;
+        else if (/Total\s+Bounty|Total\s+Reward|总赏金/i.test(value)) columns.reward = index;
+        else if (/Posted\s+By|发布者/i.test(value)) columns.poster = index;
+      });
+      table.select('tr').forEach(function (row) {
+        var bounty = parseBountyRow(row, columns);
+        if (bounty && !items.some(function (item) { return item.id === bounty.id; })) items.push(bounty);
+      });
     });
     var hasNext = false;
     doc.select('a[href*="bounty.php"][href*="p="]').forEach(function (anchor) {
@@ -3427,6 +3810,19 @@
       return { isSupported: false, bounty: fallback || null, sections: [], message: '请先登录 E-Hentai 账号。' };
     }
     var sections = genericReadOnlyTableSections(doc, 'bounty_detail', 30);
+    sections.forEach(function (section) {
+      section.metrics.forEach(function (metric) {
+        metric.title = metric.title
+          .replace(/^Bounty Poster:?$/i, '发布者')
+          .replace(/^Posted Date:?$/i, '发布日期')
+          .replace(/^Bounty Status:?$/i, '悬赏状态')
+          .replace(/^Min Hunter Rank:?$/i, '最低等级要求')
+          .replace(/^Current Reward:?$/i, '当前赏金')
+          .replace(/^Bounty Type:?$/i, '悬赏类型');
+        metric.value = localizedBountyStatus(localizedBountyType(metric.value))
+          .replace(/^Unranked$/i, '未评级');
+      });
+    });
     var details = [];
     doc.select('p').forEach(function (paragraph, index) {
       if (details.length >= 12) return;
@@ -3481,6 +3877,10 @@
 
     getToplist: function (page, period) {
       return toplistPage(page, period);
+    },
+
+    getRankings: function (page, kind, period) {
+      return rankingPage(page, kind, period);
     },
 
     getMangaDetails: function (manga) {
@@ -3684,11 +4084,6 @@
 
     getHathPerksState: function () {
       return parseHathPerksState(readOnlyPageResponse('/hathperks.php'));
-    },
-
-    getNews: function () {
-      var response = readOnlyPageResponse('/news.php');
-      return parseNewsState(response.body);
     },
 
     getBounties: function (page, query, type, status) {
