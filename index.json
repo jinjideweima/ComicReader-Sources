@@ -48,7 +48,7 @@
         }
       },
       "contentRating" : "mature",
-      "fallbackBaseURL" : "https://www.twmanga.com",
+      "fallbackBaseURL" : "https://cn.twmanga.com",
       "features" : [
         {
           "category" : "discovery",
@@ -103,7 +103,7 @@
       ],
       "id" : "baozi",
       "imageRequestHeaders" : {
-        "Referer" : "https://www.twmanga.com/",
+        "Referer" : "https://cn.twmanga.com/",
         "User-Agent" : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
       },
       "language" : "zh",
@@ -117,21 +117,21 @@
       ],
       "preferences" : [
         {
-          "defaultValue" : "tw",
-          "description" : "用于目录、搜索和阅读线路。",
+          "defaultValue" : "cn",
+          "description" : "首次安装跟随系统简繁体；之后以用户选择为准。用于目录、搜索和阅读线路。",
           "key" : "language",
           "options" : [
-            {
-              "fallbackBaseURL" : "https://www.twmanga.com",
-              "imageReferer" : "https://www.twmanga.com/",
-              "title" : "繁體中文",
-              "value" : "tw"
-            },
             {
               "fallbackBaseURL" : "https://cn.twmanga.com",
               "imageReferer" : "https://cn.twmanga.com/",
               "title" : "简体中文",
               "value" : "cn"
+            },
+            {
+              "fallbackBaseURL" : "https://www.twmanga.com",
+              "imageReferer" : "https://www.twmanga.com/",
+              "title" : "繁體中文",
+              "value" : "tw"
             }
           ],
           "title" : "内容语言"
@@ -140,14 +140,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/baozi/source.js",
-      "sha256" : "021b3357b1e333d60afc3f866e249c09910c49d8bb23ff9cca64f2b5052754fb",
+      "sha256" : "8d4aa0c09652ca63ac1f97041ce67c920315d00848a3f212b6ee426c75689b49",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "HhNpTK6nP9sWAOaUU0ZR7krH+Oms00yxaL5WGhWZq23cfFBSjGEcypFGv4LAhOrMy5v3tdiQb2rrKv5zPXWbCA=="
+        "value" : "JyKPFFqUoC3b1PnYVFZ1gV5YOrcFTAsdjW7LjSDTQEPOJmDprEg2Owzw66MZzfecVtEJDZrtCP8GvChATM8ECA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
-      "version" : "1.1.3"
+      "version" : "1.1.5"
     },
     {
       "allowedHosts" : [
@@ -268,7 +268,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "CrM20gpSPYp76xEqNcQPV3n0XglqH53BO7Wfc4/l46WD4hnbMFr/QkgPNEg8/zN2SpbUNHINpPouTscco0vEBQ=="
+        "value" : "Ils0xkLbJhh+rLp5xuerYIvkV6FZLpYZrVGFrN9M9s7iJPMXNuJDP1t++7ab13HPhF8SDFPfIysMZSCSu3qjAw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -491,7 +491,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "BeY/aVLsZj+F2kKYLPDrf+oinC8HEaxw17uePa8BQMkJ2tnBPgAHGItvKAUwlk+46UXMrNbf5IvnIE8BmlTZBA=="
+        "value" : "4QymEA/M4aD+/7NegnqpYpOtfJgq8ZaB9BPmLbPlCmiT7V6AZ7Qh3CBHS3jdkug8eO2cEyV1iSZoQ/sY74G0BQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.5.2"
@@ -655,7 +655,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "gKPho96yZE7KGFHFou4Rto/ISCXCv1mR0IhjePdEwoFJytPQ9SNK6952xO0WCPB4U2XPQXm88pf0PAuijOYuBA=="
+        "value" : "fo3nCwI21b4zrxms7qb7d93ZL953KASgTyyxkLBbh7umC4MvxvS9et17F65J1pegQ7wSPLgsi5Z9h+Y0x9y3Cg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
