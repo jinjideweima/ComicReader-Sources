@@ -63,7 +63,7 @@
   ];
 
   function languageValue() {
-    return storage.get('language') === 'cn' ? 'cn' : 'tw';
+    return storage.get('language') === 'tw' ? 'tw' : 'cn';
   }
 
   function mirrorBase(mirror) {
