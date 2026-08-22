@@ -751,7 +751,7 @@
         },
         {
           "category" : "reading",
-          "description" : "漫画详情、多章节目录、移动 API 批量取图和原生图片还原。",
+          "description" : "禁漫专属详情、分组标签、十话目录预览、相关漫画、随机推荐、移动 API 批量取图和原生图片还原。",
           "id" : "chapter_reading",
           "title" : "在线章节阅读"
         },
@@ -763,7 +763,7 @@
         },
         {
           "category" : "interaction",
-          "description" : "读取评论与楼中楼，并在详情页收藏或取消收藏。",
+          "description" : "读取完整评论与楼中楼、保留剧透折叠，并支持发表评论、收藏、喜欢和连载追踪。",
           "id" : "comments_and_favorites",
           "requiresAccount" : true,
           "title" : "评论与收藏"
@@ -777,7 +777,7 @@
         },
         {
           "category" : "account",
-          "description" : "使用移动 API 的时间戳签名与加密响应登录，并显示账号概览。",
+          "description" : "安全保存登录资料，原生展示等级资产、资料、任务、签到、信箱、收藏、追踪和历史；消费型功能保持只读。",
           "id" : "account_overview",
           "requiresAccount" : true,
           "title" : "安全登录与账号资料"
@@ -800,14 +800,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
-      "sha256" : "08fe1ca306da7589254a8e42dc54657109a5cf7df1ef3dd1dbc49b6b423ecae7",
+      "sha256" : "920bdf66a1fc490556b2543b1b99aa96f02aa4c4fb5a15f1abbc59d8acb4dd0f",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "p83YMu6ub8kdcw6FHW+NXJBKox4ECT1NPs/RCjgp4WZRUpzGfmzHnXV+DluhxeLUZCR11L6KosIfKbdE9yneDw=="
+        "value" : "pnqkL1BKygSt6EhBJZ6FypXp7o1xyk74wRrxGN7RJa5jJsTtMckbCRpiibhgi74dUof701qbrIvX0NXq4cZEAQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.0.0"
+      "version" : "1.1.0"
     }
   ]
 }

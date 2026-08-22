@@ -131,6 +131,19 @@ assert.equal(source.getChapterList(novelDetails).length, 0);
 
 const first = home.heroes[0].manga;
 const details = source.getMangaDetails(first);
+assert.match(details.info?.jmID || "", /^JM\d+$/);
+assert.ok(Number(details.info?.contentCount || 0) >= 1, "detail content count is missing");
+assert.ok(Array.isArray(details.tagGroups), "detail tag groups are missing");
+assert.ok(details.tagGroups.every((group) => group.values.length > 0), "detail contains an empty tag group");
+assert.ok(Array.isArray(details.relatedMangas), "related manga are missing");
+assert.ok(Array.isArray(details.recommendations), "random recommendations are missing");
+const interaction = source.getInteractionState(details);
+assert.equal(interaction.isSupported, true);
+assert.equal(interaction.canLike, true);
+assert.equal(interaction.canTrack, true);
+const comments = source.getComments(details);
+assert.ok(Array.isArray(comments), "comments are not an array");
+assert.ok(comments.every((comment) => typeof comment.isSpoiler === "boolean"), "comments lost spoiler state");
 const chapters = source.getChapterList(details);
 assert.ok(chapters.length >= 1, `JM${details.id} has no chapters`);
 const pages = source.getPageList(chapters[0]);
@@ -148,6 +161,7 @@ console.log(JSON.stringify({
   chapterCount: chapters.length,
   pageCount: pages.length,
   transformedPageCount: pages.filter((page) => page.imageTransform).length,
+  commentCount: comments.length,
   searchCount: search.items.length,
   fullListCounts,
   communityCount: communityItems.length,
