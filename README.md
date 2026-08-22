@@ -43,11 +43,18 @@ which ComicReader shows both during review and after installation.
 | 拷贝漫画 | `copymanga` | Mature | Discovery/topics/rankings, search, cloud favorites/history, reading/downloads |
 | E-Hentai | `ehentai` | Adult | Advanced search, favorites/watched, ratings, comments, tags, My Settings, account tools, news/bounties, archives/torrents |
 | MangaBZ | `mangabz` | Mature | Editorial home/search/rankings, favorites/history, batch shelf management, reading/downloads |
+| 禁漫天堂 | `jmcomic` | Adult | Ad-free editorial home, search/rankings, comments, signed native login, favorites/history, image restoration, reading/downloads |
 
 Account features require a ComicReader build that supports signed declarative
 authentication manifests. Passwords are submitted by native code only for the
 current HTTPS login request. JavaScript receives only a non-secret signed-in
 status flag; it never receives cookie or token values.
+
+JMComic uses its mobile API because the public web frontend may reject ordinary
+app networking with an anti-bot challenge. Its timestamp signing and encrypted
+login response are handled by ComicReader's native credential boundary; the
+plugin script still never receives the account token. Maintainers can run the
+read-only live contract check with `node tools/smoke-jmcomic.mjs`.
 
 Signed `resources` are optional non-executable data files. ComicReader downloads
 them from the repository origin, verifies each SHA-256, and stores them beside

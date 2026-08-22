@@ -659,6 +659,155 @@
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
+    },
+    {
+      "allowedHosts" : [
+        "18comic.vip",
+        "*.18comic.vip",
+        "www.cdnhth.club",
+        "www.cdngwc.cc",
+        "www.cdngwc.net",
+        "www.cdngwc.club",
+        "www.cdnhjk.cc",
+        "www.cdnaspa.vip",
+        "www.cdnaspa.club",
+        "www.cdnplaystation6.org",
+        "www.cdnplaystation6.vip",
+        "www.cdnplaystation6.cc",
+        "*.jmdanjonproxy.xyz",
+        "*.jmdanjonproxy.vip",
+        "*.jmapiproxy1.cc",
+        "*.jmapiproxy2.cc",
+        "*.jmapinodeudzn.net",
+        "*.bytepluses.com"
+      ],
+      "authentication" : {
+        "formLogin" : {
+          "encoding" : "urlEncoded",
+          "headers" : {
+            "User-Agent" : "Mozilla/5.0 (Linux; Android 9; V1938CT Build/PQ3A.190705.11211812; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Safari/537.36"
+          },
+          "passwordField" : "password",
+          "requestSigning" : {
+            "kind" : "md5EpochSeconds",
+            "parameterHeader" : "tokenparam",
+            "secretSuffix" : "18comicAPP",
+            "tokenHeader" : "token",
+            "version" : "2.0.33"
+          },
+          "responseDecryption" : {
+            "kind" : "aes256ECBBase64JSON",
+            "payloadJSONPath" : "data",
+            "secretSuffix" : "185Hcomic3PAPP7R"
+          },
+          "tokenJSONPath" : "s",
+          "url" : "https://www.cdnhth.club/login",
+          "usernameField" : "username"
+        },
+        "tokenAttachment" : {
+          "hosts" : [
+            "www.cdnhth.club",
+            "www.cdngwc.cc",
+            "www.cdngwc.net",
+            "www.cdngwc.club",
+            "www.cdnhjk.cc",
+            "www.cdnaspa.vip",
+            "www.cdnaspa.club",
+            "www.cdnplaystation6.org",
+            "www.cdnplaystation6.vip",
+            "www.cdnplaystation6.cc"
+          ],
+          "kind" : "cookie",
+          "name" : "AVS",
+          "pathPrefix" : "/"
+        }
+      },
+      "contentRating" : "adult",
+      "fallbackBaseURL" : "https://18comic.vip",
+      "features" : [
+        {
+          "category" : "discovery",
+          "description" : "每日连载自动轮播、汉化组、韩漫、推荐、去码全彩与每周必看。",
+          "id" : "editorial_home",
+          "title" : "无广告多栏目首页"
+        },
+        {
+          "category" : "discovery",
+          "description" : "按作品、作者、标签、角色、题材、时间和热度组合筛选。",
+          "id" : "search_filters",
+          "title" : "搜索与筛选"
+        },
+        {
+          "category" : "discovery",
+          "description" : "日榜、周榜、月榜与总榜。",
+          "id" : "toplist",
+          "title" : "禁漫排行榜"
+        },
+        {
+          "category" : "discovery",
+          "description" : "原生展示绅夜食堂、游戏文库、西斯话题、禁漫书库与禁漫小说入口，不加载广告网页。",
+          "id" : "editorial_extras",
+          "title" : "社区、书库与小说"
+        },
+        {
+          "category" : "reading",
+          "description" : "漫画详情、多章节目录、移动 API 批量取图和原生图片还原。",
+          "id" : "chapter_reading",
+          "title" : "在线章节阅读"
+        },
+        {
+          "category" : "reading",
+          "description" : "下载章节时完成图片还原并写入本地书架。",
+          "id" : "chapter_download",
+          "title" : "章节下载"
+        },
+        {
+          "category" : "interaction",
+          "description" : "读取评论与楼中楼，并在详情页收藏或取消收藏。",
+          "id" : "comments_and_favorites",
+          "requiresAccount" : true,
+          "title" : "评论与收藏"
+        },
+        {
+          "category" : "library",
+          "description" : "登录后读取禁漫天堂收藏与观看历史。",
+          "id" : "cloud_shelf",
+          "requiresAccount" : true,
+          "title" : "云端书架与历史"
+        },
+        {
+          "category" : "account",
+          "description" : "使用移动 API 的时间戳签名与加密响应登录，并显示账号概览。",
+          "id" : "account_overview",
+          "requiresAccount" : true,
+          "title" : "安全登录与账号资料"
+        }
+      ],
+      "id" : "jmcomic",
+      "imageRequestHeaders" : {
+        "Referer" : "https://18comic.vip/",
+        "User-Agent" : "Mozilla/5.0 (Linux; Android 9; V1938CT Build/PQ3A.190705.11211812; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Safari/537.36"
+      },
+      "language" : "zh",
+      "license" : "Apache-2.0",
+      "name" : "禁漫天堂",
+      "permissions" : [
+        "network",
+        "persistentPreferences",
+        "accountAuthentication",
+        "accountCookies"
+      ],
+      "publisher" : "ComicReader Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "scriptURL" : "sources/jmcomic/source.js",
+      "sha256" : "08fe1ca306da7589254a8e42dc54657109a5cf7df1ef3dd1dbc49b6b423ecae7",
+      "signature" : {
+        "algorithm" : "ed25519-v2",
+        "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
+        "value" : "p83YMu6ub8kdcw6FHW+NXJBKox4ECT1NPs/RCjgp4WZRUpzGfmzHnXV+DluhxeLUZCR11L6KosIfKbdE9yneDw=="
+      },
+      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
+      "version" : "1.0.0"
     }
   ]
 }

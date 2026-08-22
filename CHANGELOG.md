@@ -5,6 +5,10 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Add the signed JMComic (禁漫天堂) 1.0.0 source with a ten-section ad-free
+  editorial home, weekly picks, community/library/novel previews, search and
+  rankings, comments, native encrypted login, favorites/history, chapter image
+  restoration, online reading, and downloads.
 - Upgrade E-Hentai to 1.5.1: parse only explicit official filtered-result
   sentences so total search counts cannot be reported as removed items.
 - Upgrade E-Hentai to 1.5.0: read actual `Obtained` Hath perks, enforce My Tags
@@ -23,7 +27,7 @@ must update that source version, digest, and signature together.
 - Upgrade E-Hentai to 1.2.0 with typed My Settings read/write support,
   allowlisted full-form preservation, entitlement locks, per-field readback,
   account-filter result metadata, and all five official list layouts.
-- Declare a signed, user-visible feature catalogue for all four sources so the
+- Declare a signed, user-visible feature catalogue for the original four sources so the
   app can expose their complete capabilities during review and management.
 - Rename Baozi and CopyManga to their Chinese display names.
 - Allow E-Hentai's publisher-isolated login session to retain Cloudflare
