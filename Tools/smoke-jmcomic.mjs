@@ -115,12 +115,12 @@ const home = source.getHome();
 assert.ok(home.heroes.length >= 1, "homepage has no serialisation heroes");
 const sectionIDs = new Set(home.hotCategories.map((section) => section.id));
 for (const required of [
-  "jm_translation", "korean", "c108", "uncensored_color", "community",
+  "jm_translation", "korean", "c108", "uncensored_color",
+  "community:dinner", "community:raiders", "community:sexytalk",
   "library", "novels", "single", "latest",
 ]) {
   assert.ok(sectionIDs.has(required), `homepage is missing ${required}`);
 }
-assert.equal(home.hotCategories.find((section) => section.id === "community")?.items.length, 3);
 assert.ok(home.hotCategories.every((section) => section.items.length <= 10));
 
 const homepageItems = [
@@ -147,18 +147,22 @@ if (weeklySection) {
   fullListCounts.week = result.items.length;
 }
 
-const communityItems = home.hotCategories.find((section) => section.id === "community").items;
-for (const item of communityItems) {
-  const communityDetails = source.getMangaDetails(item);
-  assert.equal(communityDetails.info?.contentKind, "community");
-  assert.equal(source.getChapterList(communityDetails).length, 0);
+const editorialSections = home.hotCategories.filter((section) => section.id.startsWith("community:"));
+for (const section of editorialSections) {
+  for (const item of section.items) {
+    assert.equal(item.info?.contentKind, "article");
+    assert.equal(source.getChapterList(item).length, 0);
+  }
 }
 
 const libraryItem = home.hotCategories.find((section) => section.id === "library")?.items[0];
 assert.ok(libraryItem, "library preview is empty");
+assert.match(libraryItem.coverURL || "", /^https:\/\/cdn-msp[^/]*\.18comic\.vip\/media\/library\//);
 const libraryDetails = source.getMangaDetails(libraryItem);
 assert.equal(libraryDetails.info?.contentKind, "library");
 assert.equal(source.getChapterList(libraryDetails).length, 0);
+const rawPromote = globalThis.__smokeApiGet("/promote") || [];
+const rawLibraryItem = (rawPromote.find((section) => String(section?.id) === "1001")?.content || [])[0] || {};
 
 const novelItem = home.hotCategories.find((section) => section.id === "novels")?.items[0];
 assert.ok(novelItem, "novel preview is empty");
@@ -210,7 +214,10 @@ const interaction = source.getInteractionState(details);
 assert.equal(interaction.isSupported, true);
 assert.equal(interaction.canLike, true);
 assert.equal(interaction.canTrack, true);
-const comments = source.getComments(details);
+const firstCommentPage = source.getCommentsPage(details, 1);
+assert.ok(Array.isArray(firstCommentPage.comments), "first comment page is not an array");
+assert.ok(firstCommentPage.comments.length <= 40, "first comment page is unbounded");
+const comments = firstCommentPage.comments;
 assert.ok(Array.isArray(comments), "comments are not an array");
 assert.ok(comments.every((comment) => typeof comment.isSpoiler === "boolean"), "comments lost spoiler state");
 const chapters = source.getChapterList(details);
@@ -271,7 +278,10 @@ console.log(JSON.stringify({
   rootCommentCount: comments.filter((comment) => comment.isReply !== true).length,
   searchCount: search.items.length,
   fullListCounts,
-  communityCount: communityItems.length,
+  communityCount: editorialSections.reduce((count, section) => count + section.items.length, 0),
   libraryKind: libraryDetails.info.contentKind,
+  rawLibraryItem: Object.fromEntries(Object.entries(rawLibraryItem).filter(([key]) =>
+    !/token|secret|password/i.test(key)
+  )),
   novelKind: novelDetails.info.contentKind,
 }, null, 2));
