@@ -5,6 +5,12 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade JMComic to 1.4.0: use the verified website comment endpoint, make
+  favorite/like/tracking updates independent and responsive, preserve complete
+  work/character/tag/author groups and official random/article links, and
+  expand the native account center with invitation, profile/avatar editing,
+  charge/J-jar/combat metrics, novel shelves, tag blocking, and all history
+  modules through isolated authenticated website tools.
 - Upgrade JMComic to 1.2.0: preserve all comment pages and native commenter
   metadata, make comment submission non-blocking, verify favorite/like/tracking
   mutations, aggregate series-wide official dates/views/comment totals, expose

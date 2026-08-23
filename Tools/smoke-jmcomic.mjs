@@ -214,6 +214,39 @@ const interaction = source.getInteractionState(details);
 assert.equal(interaction.isSupported, true);
 assert.equal(interaction.canLike, true);
 assert.equal(interaction.canTrack, true);
+
+const liveFetch = globalThis.fetch;
+const commentRequests = [];
+try {
+  globalThis.fetch = (url, options = {}) => {
+    commentRequests.push({ url: String(url), options });
+    return { status: 200, body: JSON.stringify({ err: false, cid: String(9000 + commentRequests.length) }), headers: {} };
+  };
+  const rootSubmit = source.submitCommentAdvanced(details, "Smoke root comment", true, null);
+  const replySubmit = source.submitCommentAdvanced(details, "Smoke reply", false, "12345");
+  assert.equal(rootSubmit.didSubmit, true);
+  assert.equal(replySubmit.didSubmit, true);
+} finally {
+  globalThis.fetch = liveFetch;
+}
+assert.equal(commentRequests.length, 2);
+assert.equal(commentRequests[0].url, "https://18comic.vip/ajax/album_comment");
+const rootCommentFields = Object.fromEntries(new URLSearchParams(commentRequests[0].options.body));
+assert.deepEqual(rootCommentFields, {
+  comment: "Smoke root comment",
+  originator: "",
+  status: "true",
+  video_id: String(details.id),
+});
+const replyCommentFields = Object.fromEntries(new URLSearchParams(commentRequests[1].options.body));
+assert.deepEqual(replyCommentFields, {
+  comment: "Smoke reply",
+  comment_id: "12345",
+  forum_subject: "1",
+  is_reply: "1",
+  originator: "",
+  video_id: String(details.id),
+});
 const firstCommentPage = source.getCommentsPage(details, 1);
 assert.ok(Array.isArray(firstCommentPage.comments), "first comment page is not an array");
 assert.ok(firstCommentPage.comments.length <= 40, "first comment page is unbounded");
@@ -253,6 +286,10 @@ console.log(JSON.stringify({
     comment_total: rawAlbum.comment_total ?? null,
     firstSeries: Array.isArray(rawAlbum.series) ? rawAlbum.series[0] ?? null : null,
     lastSeries: Array.isArray(rawAlbum.series) ? rawAlbum.series.at(-1) ?? null : null,
+    tags: rawAlbum.tags ?? null,
+    works: rawAlbum.works ?? null,
+    actors: rawAlbum.actors ?? null,
+    author: rawAlbum.author ?? null,
   },
   detailMetrics: {
     listedAt: details.info?.listedAt ?? null,
@@ -260,6 +297,7 @@ console.log(JSON.stringify({
     views: details.info?.views ?? null,
     comments: details.info?.comments ?? null,
     metricScope: details.info?.metricScope ?? null,
+    tagGroups: details.tagGroups ?? null,
   },
   rawFirstChapterFields: Object.fromEntries(Object.entries(rawFirstChapter).filter(([key]) =>
     key !== "images" && !/token|secret|password/i.test(key)

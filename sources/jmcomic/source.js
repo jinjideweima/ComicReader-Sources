@@ -320,6 +320,37 @@
     return websiteHTMLCache[url];
   }
 
+  function websitePost(path, fields, refererPath) {
+    var url = websiteURL(path);
+    if (!url) throw new Error('禁漫天堂网页地址不受信任');
+    var referer = websiteURL(refererPath || '/');
+    var response = fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Origin': WEBSITE_BASE,
+        'Referer': referer || (WEBSITE_BASE + '/'),
+        'User-Agent': API_UA,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: encodeForm(fields || {}),
+      timeout: 15
+    });
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error('禁漫天堂网页操作暂时不可用（HTTP ' + response.status + '）');
+    }
+    var body = String(response.body || '').trim();
+    if (!body) throw new Error('官网没有返回操作结果');
+    try {
+      return JSON.parse(body);
+    } catch (_) {
+      if (/login|登入|登录/i.test(body)) throw new Error('禁漫天堂登录状态已失效，请重新登录');
+      throw new Error('官网返回了无法识别的操作结果');
+    }
+  }
+
   function websiteDocument(path) {
     var url = websiteURL(path);
     return parseHTML(websiteGet(path), url || WEBSITE_BASE);
@@ -508,6 +539,24 @@
     try {
       var albumDocument = websiteDocument('/album/' + result.id);
       result.relatedArticles = parseEditorialCards(albumDocument.selectFirst('#related_comics'), 'dinner', 12);
+      var officialRandomID = null;
+      albumDocument.select('a[href*="/album/"]').forEach(function (anchor) {
+        if (officialRandomID) return;
+        var text = String(anchor.text() || '').replace(/\s+/g, '').trim();
+        if (text.indexOf('隨便看看') < 0 && text.indexOf('随便看看') < 0) return;
+        var match = String(anchor.attr('href') || anchor.attr('abs:href') || '').match(/\/album\/(\d+)/);
+        if (match && match[1] !== result.id) officialRandomID = match[1];
+      });
+      if (officialRandomID) {
+        var matchedIndex = -1;
+        result.recommendations.forEach(function (manga, index) {
+          if (String(manga.id) === officialRandomID) matchedIndex = index;
+        });
+        var officialRandom = matchedIndex >= 0
+          ? result.recommendations.splice(matchedIndex, 1)[0]
+          : mapAlbum({ id: officialRandomID, name: '随机推荐' }, false);
+        result.recommendations.unshift(officialRandom);
+      }
     } catch (_) {
       // A failed website request must never be replaced by unrelated library
       // works. The mobile API does not expose this relationship.
@@ -1063,24 +1112,27 @@
       || isEnabledValue(tracking.status);
   }
 
-  function confirmAlbumInteraction(id, field, desired) {
-    var latest = null;
-    for (var attempt = 0; attempt < 4; attempt++) {
-      if (attempt > 0) sleep(attempt * 220);
-      latest = albumInteraction(id);
-      if (latest[field] === desired) break;
-    }
-    return latest;
-  }
-
   function confirmTrackingInteraction(id, desired) {
     var latest = false;
-    for (var attempt = 0; attempt < 4; attempt++) {
-      if (attempt > 0) sleep(attempt * 220);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) sleep(180);
       latest = trackingInteraction(id);
       if (latest === desired) break;
     }
     return latest;
+  }
+
+  function hasBusinessStatus(payload, expected) {
+    if (!payload || typeof payload !== 'object') return false;
+    var status = String(payload.status === undefined ? '' : payload.status).toLowerCase();
+    return (expected || []).some(function (value) { return status === value; });
+  }
+
+  function adjustedCount(value, delta) {
+    var text = String(value === undefined || value === null ? '' : value);
+    var numeric = Number(text.replace(/,/g, ''));
+    if (!isFinite(numeric)) return value;
+    return String(Math.max(0, Math.floor(numeric + delta)));
   }
 
   function interactionState(manga) {
@@ -1167,6 +1219,140 @@
     });
   }
 
+  function accountUsername(profile) {
+    return profileValue(profile, ['username', 'nickname', 'nickName', 'fname', 'uid'], '');
+  }
+
+  function accountWebsitePath(kind, profile) {
+    var username = accountUsername(profile);
+    var encoded = encodeURIComponent(username);
+    if (kind === 'profile') return '/user/edit';
+    if (kind === 'avatar') return '/user/avatar';
+    if (!username) return null;
+    var paths = {
+      overview: '/user/' + encoded,
+      tasks: '/user/' + encoded + '/achievements',
+      daily: '/user/' + encoded + '/daily',
+      gacha: '/user/' + encoded + '/bonus',
+      inbox: '/user/' + encoded + '/notice',
+      comicFavorites: '/user/' + encoded + '/favorite/albums',
+      novelFavorites: '/user/' + encoded + '/favorite/novels',
+      tracking: '/user/' + encoded + '/tracking',
+      tagBlock: '/user/' + encoded + '/tag_block',
+      comicHistory: '/user/' + encoded + '/favorite/watchlist',
+      novelHistory: '/user/' + encoded + '/favorite/novel_watchlist',
+      videoHistory: '/user/' + encoded + '/playlist'
+    };
+    return paths[kind] || null;
+  }
+
+  function accountWebsiteLinks(kind, profile) {
+    var path = accountWebsitePath(kind, profile);
+    if (!path) return [];
+    var titles = {
+      profile: '打开官网完整资料编辑',
+      avatar: '打开官网头像上传',
+      tasks: '打开官网成就与任务',
+      daily: '打开官网签到活动',
+      gacha: '打开官网一番赏记录',
+      inbox: '打开官网信箱',
+      comicFavorites: '打开官网漫画收藏',
+      novelFavorites: '打开官网小说收藏',
+      tracking: '打开官网连载追踪',
+      tagBlock: '打开官网标签屏蔽',
+      comicHistory: '打开官网漫画观看记录',
+      novelHistory: '打开官网小说观看记录',
+      videoHistory: '打开官网小电影记录'
+    };
+    return [{ id: 'official:' + kind, title: titles[kind] || '打开官网完整页面', url: WEBSITE_BASE + path }];
+  }
+
+  function accountWebListMetrics(path, hrefFragment, prefix, limit) {
+    var doc = websiteDocument(path);
+    var seen = {};
+    var metrics = [];
+    doc.select('a[href*="' + hrefFragment + '"]').forEach(function (anchor) {
+      if (metrics.length >= (limit || 30)) return;
+      var href = String(anchor.attr('href') || anchor.attr('abs:href') || '');
+      var title = String(anchor.text() || '').replace(/\s+/g, ' ').trim();
+      var image = anchor.selectFirst('img');
+      if (!title && image) title = String(image.attr('title') || image.attr('alt') || '').trim();
+      if (!title || title.length > 160 || seen[href + '|' + title]) return;
+      seen[href + '|' + title] = true;
+      metrics.push({ id: (prefix || 'web') + ':' + metrics.length, title: title, value: '官网记录' });
+    });
+    return metrics;
+  }
+
+  function tagBlockMetrics(profile) {
+    var path = accountWebsitePath('tagBlock', profile);
+    if (!path) return [];
+    var doc = websiteDocument(path);
+    var metrics = [];
+    doc.select('.tag-block-table tbody tr').forEach(function (row, index) {
+      var cells = row.select('td');
+      var title = cells.length ? String(cells[0].text() || '').trim() : '';
+      var control = row.selectFirst('input[name="tag_block[]"]');
+      if (!title || !control) return;
+      var disabled = typeof control.hasAttr === 'function'
+        ? control.hasAttr('disabled')
+        : String(control.attr('disabled') || '').length > 0;
+      var checked = typeof control.hasAttr === 'function'
+        ? control.hasAttr('checked')
+        : String(control.attr('checked') || '').length > 0;
+      metrics.push({
+        id: 'tag-block:' + index,
+        title: title,
+        value: disabled ? '当前等级未开放' : (checked ? '已屏蔽' : '未屏蔽')
+      });
+    });
+    return metrics;
+  }
+
+  function websiteAccountSnapshot(profile) {
+    var path = accountWebsitePath('overview', profile);
+    if (!path) return { progress: [], battle: [], invitation: [] };
+    var doc = websiteDocument(path);
+    var known = {
+      '稱號': '称号', '称号': '称号', '等級': '等级', '等级': '等级',
+      '可收藏數': '可收藏数', '可收藏数': '可收藏数',
+      'J Coins': 'JCOINS', 'JCOINS': 'JCOINS', '勳章': '勋章', '勋章': '勋章'
+    };
+    var progress = [];
+    var battle = [];
+    var seen = {};
+    doc.select('.header-profile-row').forEach(function (row) {
+      var nameElement = row.selectFirst('.header-profile-row-name');
+      var valueElement = row.selectFirst('.header-profile-row-value');
+      var rawName = nameElement ? String(nameElement.text() || '').trim() : '';
+      var value = valueElement ? String(valueElement.text() || '').trim() : '';
+      if (!rawName || !value) return;
+      var name = known[rawName] || rawName;
+      if (seen[name]) return;
+      seen[name] = true;
+      var metric = { id: 'website:' + name, title: name, value: value };
+      if (known[rawName]) progress.push(metric);
+      else battle.push(metric);
+    });
+    var charge = doc.selectFirst('.header-info-charge:not(.hidden-lg)') || doc.selectFirst('.header-info-charge');
+    if (charge) {
+      var chargeText = String(charge.text() || '').replace(/\s+/g, ' ').trim();
+      var chargeMatch = chargeText.match(/([0-9]+\s*\/\s*[0-9]+)\s*充能/);
+      var jarMatch = chargeText.match(/([0-9]+\s*\/\s*[0-9]+)\s*J罐/i);
+      if (chargeMatch) progress.push({ id: 'website:charge', title: '充能', value: chargeMatch[1].replace(/\s+/g, '') });
+      if (jarMatch) progress.push({ id: 'website:jar', title: 'J罐', value: jarMatch[1].replace(/\s+/g, '') });
+    }
+    var invitation = [];
+    var username = accountUsername(profile);
+    if (username) invitation.push({ id: 'invite-code', title: '邀请码', value: username });
+    var inviteRoot = doc.selectFirst('.user-qrcode-main');
+    if (inviteRoot) {
+      var invited = String(inviteRoot.text() || '').match(/已邀請人數[：:]\s*([0-9]+\s*\/\s*[0-9]+)/);
+      if (invited) invitation.push({ id: 'invite-count', title: '已邀请人数', value: invited[1].replace(/\s+/g, '') });
+    }
+    return { progress: progress, battle: battle, invitation: invitation };
+  }
+
   function accountToolState(kind) {
     var profile = accountProfile();
     var uid = profileValue(profile, ['uid'], '');
@@ -1184,9 +1370,9 @@
       return {
         isSupported: true,
         title: '个人资料',
-        introduction: '可编辑站点公开资料；密码与头像上传仍保持只读，避免误覆盖账号凭据或媒体文件。',
+        introduction: '原生编辑移动端支持的公开资料；性别、密码和头像等官网专属字段可在下方安全网页中完成。',
         sections: [{ id: 'profile', title: '公开资料', metrics: metricsFromObject(editable, 'profile', 28) }],
-        links: [], message: null
+        links: accountWebsiteLinks('profile', profile).concat(accountWebsiteLinks('avatar', profile)), message: null
       };
     }
     if (kind === 'tasks') {
@@ -1194,7 +1380,7 @@
       return {
         isSupported: true, title: '成就任务', introduction: '任务进度只读；领取奖励暂不自动执行。',
         sections: [{ id: 'tasks', title: '任务', metrics: listMetrics(tasks, 'task', 30).concat(metricsFromObject(tasks, 'task-field', 8)) }],
-        links: [], message: null
+        links: accountWebsiteLinks('tasks', profile), message: null
       };
     }
     if (kind === 'daily') {
@@ -1202,7 +1388,7 @@
       return {
         isSupported: true, title: '签到活动', introduction: '签到会改变账号状态，只有点击确认按钮后才会执行。',
         sections: [{ id: 'daily', title: '今日状态', metrics: metricsFromObject(daily, 'daily', 20) }],
-        links: [], message: null
+        links: accountWebsiteLinks('daily', profile), message: null
       };
     }
     if (kind === 'inbox') {
@@ -1214,7 +1400,7 @@
         sections: [
           { id: 'unread', title: '未读', metrics: metricsFromObject(unread, 'unread', 6) },
           { id: 'messages', title: '消息', metrics: listMetrics(notifications, 'notification', 30) }
-        ], links: [], message: null
+        ], links: accountWebsiteLinks('inbox', profile), message: null
       };
     }
     if (kind === 'tracking') {
@@ -1222,7 +1408,7 @@
       return {
         isSupported: true, title: '连载追踪', introduction: '只读显示官网追踪列表；详情页铃铛可开启或关闭单本追踪。',
         sections: [{ id: 'tracking', title: '追踪漫画', metrics: listMetrics(tracking, 'tracking', 30) }],
-        links: [], message: null
+        links: accountWebsiteLinks('tracking', profile), message: null
       };
     }
     if (kind === 'comicFavorites') {
@@ -1230,7 +1416,7 @@
       return {
         isSupported: true, title: '漫画收藏', introduction: '显示官网收藏的第一页；完整分页可在在线书架的收藏模式中浏览。',
         sections: [{ id: 'favorites', title: '最近收藏', metrics: listMetrics(favoritePage, 'favorite', 30) }],
-        links: [], message: null
+        links: accountWebsiteLinks('comicFavorites', profile), message: null
       };
     }
     if (kind === 'comicHistory') {
@@ -1238,19 +1424,55 @@
       return {
         isSupported: true, title: '漫画观看记录', introduction: '显示官网记录的第一页；完整分页可在在线书架的历史模式中浏览。',
         sections: [{ id: 'history', title: '最近观看', metrics: listMetrics(watchPage, 'history', 30) }],
-        links: [], message: null
+        links: accountWebsiteLinks('comicHistory', profile), message: null
       };
     }
-    var explanations = {
-      gacha: '一番赏与 JCOINS 接口包含消费语义，当前只显示登录资料中的余额，不在 App 内抽取或充值。',
-      novelFavorites: '移动 API 的小说收藏结构尚未稳定验证，暂不混入漫画收藏。',
-      tagBlock: '标签屏蔽写入接口尚未稳定验证，避免误覆盖账号规则。',
-      novelHistory: '小说历史接口尚未稳定验证。',
-      videoHistory: '小电影历史接口尚未稳定验证。'
-    };
+    if (kind === 'novelFavorites') {
+      var novels = apiGet('/novel_favorites?page=1&o=') || {};
+      return {
+        isSupported: true, title: '小说收藏', introduction: '显示官网小说收藏第一页，并保留独立的小说资料夹语义。',
+        sections: [{ id: 'novel-favorites', title: '最近收藏', metrics: listMetrics(novels, 'novel-favorite', 30) }],
+        links: accountWebsiteLinks('novelFavorites', profile), message: null
+      };
+    }
+    if (kind === 'tagBlock') {
+      var blockedTags = [];
+      var tagMessage = null;
+      try { blockedTags = tagBlockMetrics(profile); } catch (error) { tagMessage = String(error && error.message || error); }
+      return {
+        isSupported: true, title: '标签屏蔽', introduction: '逐项显示官网的屏蔽状态与等级限制；修改时进入受限的官网页面并由你确认。',
+        sections: [{ id: 'tag-block', title: '屏蔽状态', metrics: blockedTags }],
+        links: accountWebsiteLinks('tagBlock', profile), message: tagMessage
+      };
+    }
+    if (kind === 'novelHistory' || kind === 'videoHistory') {
+      var historyPath = accountWebsitePath(kind, profile);
+      var fragment = kind === 'novelHistory' ? '/novel/' : '/video/';
+      var webHistory = [];
+      var historyMessage = null;
+      try { webHistory = accountWebListMetrics(historyPath, fragment, kind, 30); }
+      catch (historyError) { historyMessage = String(historyError && historyError.message || historyError); }
+      return {
+        isSupported: true,
+        title: kind === 'novelHistory' ? '小说观看记录' : '小电影观看记录',
+        introduction: '只读同步官网最近记录；清空操作仅在官网完整页面中由你手动确认。',
+        sections: [{ id: kind, title: '最近观看', metrics: webHistory }],
+        links: accountWebsiteLinks(kind, profile), message: historyMessage
+      };
+    }
+    if (kind === 'gacha') {
+      return {
+        isSupported: true, title: '一番赏记录',
+        introduction: '一番赏涉及 JCOINS 消费；App 展示余额并提供官网记录入口，不会自动抽取或购买。',
+        sections: [{ id: 'gacha-balance', title: '当前资产', metrics: [
+          { id: 'gacha-coin', title: 'JCOINS', value: profileValue(profile, ['coin'], '—') }
+        ] }],
+        links: accountWebsiteLinks('gacha', profile), message: null
+      };
+    }
     return {
-      isSupported: false, title: '暂未开放', introduction: explanations[kind] || '该模块尚未完成安全验证。',
-      sections: [], links: [], message: explanations[kind] || '暂未开放'
+      isSupported: false, title: '暂未开放', introduction: '该模块尚未完成安全验证。',
+      sections: [], links: [], message: '暂未开放'
     };
   }
 
@@ -1270,15 +1492,14 @@
     var id = albumID(manga.id || manga.url);
     var state = favoriteState(manga);
     if (state.isFavorited !== desired) {
-      apiPost('/favorite', { aid: id });
-      var confirmed = confirmAlbumInteraction(id, 'isFavorited', desired).isFavorited;
-      if (confirmed !== desired) {
+      var result = apiPost('/favorite', { aid: id });
+      if (!hasBusinessStatus(result, ['ok'])) {
         state.isSupported = false;
-        state.isFavorited = confirmed;
-        state.message = desired ? '官网尚未确认收藏，请稍后重试' : '官网尚未确认取消收藏，请稍后重试';
+        state.message = String((result && (result.msg || result.message))
+          || (desired ? '官网尚未确认收藏，请稍后重试' : '官网尚未确认取消收藏，请稍后重试'));
         return state;
       }
-      state.isFavorited = confirmed;
+      state.isFavorited = desired;
     }
     state.message = desired ? '已加入禁漫天堂收藏' : '已从禁漫天堂收藏移除';
     return state;
@@ -1523,28 +1744,42 @@
         : albumID(manga.id || manga.url);
       var text = String(body || '').trim();
       if (!text) return { isSupported: true, didSubmit: false, message: '评论不能为空。', comments: null };
-      var fields = {
-        aid: id,
-        comment: text,
-        status: spoiler ? 'true' : 'false',
-        comment_id: parentID || '0'
+      if (kind === 'article') return {
+        isSupported: false,
+        didSubmit: false,
+        message: '文章评论发送接口尚未完成官网验证。',
+        comments: null
       };
-      if (kind === 'article') {
-        fields.aid = '';
-        fields.bid = id;
+
+      // The mobile API exposes comment reads but does not support writes. The
+      // official website posts root comments to /ajax/album_comment; replies
+      // use the same route with the three reply-specific fields below.
+      var webFields = {
+        video_id: id,
+        comment: text,
+        originator: ''
+      };
+      if (parentID) {
+        webFields.comment_id = String(parentID);
+        webFields.is_reply = '1';
+        webFields.forum_subject = '1';
+      } else {
+        webFields.status = spoiler ? 'true' : 'false';
       }
-      var submitted = apiPost('/comment', fields);
-      if (submitted && submitted.status !== undefined) {
-        var submitStatus = String(submitted.status).toLowerCase();
-        if (submitStatus !== 'ok' && submitStatus !== '1' && submitStatus !== 'true') {
-          return {
-            isSupported: true,
-            didSubmit: false,
-            message: String(submitted.msg || submitted.message || '官网没有确认评论发送。'),
-            comments: null
-          };
-        }
+      var submitted = websitePost('/ajax/album_comment', webFields, '/album/' + id + '/');
+      var submitStatus = String(submitted && submitted.status !== undefined ? submitted.status : '').toLowerCase();
+      var didSubmit = submitted && submitted.err === false
+        && (submitted.cid !== undefined || (submitted.data && submitted.data.cid !== undefined));
+      if (!didSubmit && (submitStatus === 'ok' || submitStatus === '1' || submitStatus === 'true')) didSubmit = true;
+      if (!didSubmit) {
+        return {
+          isSupported: true,
+          didSubmit: false,
+          message: String((submitted && (submitted.msg || submitted.message || submitted.error)) || '官网没有确认评论发送。'),
+          comments: null
+        };
       }
+      delete commentPagingCache[id];
       return {
         isSupported: true,
         didSubmit: true,
@@ -1581,8 +1816,10 @@
 
     getAccountOverview: function () {
       var profile = accountProfile();
-      var favorites = apiGet('/favorite?page=1') || {};
-      var history = apiGet('/watch_list?page=1') || {};
+      var favorites = {};
+      var history = {};
+      try { favorites = apiGet('/favorite?page=1') || {}; } catch (_) {}
+      try { history = apiGet('/watch_list?page=1') || {}; } catch (_) {}
       var progressMetrics = [
         { id: 'title', title: '称号', value: profileValue(profile, ['title', 'level_name'], '—') },
         { id: 'coin', title: 'JCOINS', value: profileValue(profile, ['coin'], '—') },
@@ -1599,6 +1836,10 @@
         var tagStats = JSON.parse(profileValue(profile, ['tag_stats', 'tag_power'], '{}'));
         progressMetrics = progressMetrics.concat(metricsFromObject(tagStats, 'tag-power', 12));
       } catch (_) {}
+      var websiteSnapshot = { progress: [], battle: [], invitation: [] };
+      try { websiteSnapshot = websiteAccountSnapshot(profile); } catch (_) {}
+      if (websiteSnapshot.progress.length) progressMetrics = websiteSnapshot.progress;
+      var username = accountUsername(profile);
       return {
         isSupported: true,
         sections: [
@@ -1606,10 +1847,12 @@
             { id: 'nickname', title: '昵称', value: profileValue(profile, ['nickname', 'nickName', 'fname', 'username'], '已登录用户') },
             { id: 'status', title: '状态', value: profileValue(profile, ['status', 'message'], '已登录') },
             { id: 'uid', title: 'UID', value: profileValue(profile, ['uid'], '重新登录后显示') },
-            { id: 'invite', title: '邀请码', value: profileValue(profile, ['invite_code'], '未公开') },
+            { id: 'invite', title: '邀请码', value: profileValue(profile, ['invite_code'], username || '未公开') },
             { id: 'api', title: '数据线路', value: storage.get('active_api_domain') || '自动选择' }
           ] },
           { id: 'progress', title: '等级与资产', metrics: progressMetrics },
+          { id: 'battle', title: '战斗力', metrics: websiteSnapshot.battle },
+          { id: 'invitation', title: '邀请', metrics: websiteSnapshot.invitation },
           { id: 'library', title: '云端书架', metrics: [
             { id: 'favorites', title: '收藏漫画', value: String(favorites.total || (favorites.list || []).length || 0) },
             { id: 'history', title: '本页阅读记录', value: String((history.list || history || []).length || 0) }
@@ -1670,22 +1913,27 @@
     setLiked: function (manga, desired) {
       var id = albumID(manga.id || manga.url);
       var state = interactionCache[id] || interactionState(manga);
-      if (state.isLiked !== !!desired) apiPost('/like', { id: albumID(manga.id || manga.url) });
-      var verified = confirmAlbumInteraction(id, 'isLiked', !!desired);
+      var nextLiked = !!desired;
+      if (state.isLiked !== nextLiked) {
+        var result = apiPost('/like', { id: id });
+        if (!hasBusinessStatus(result, ['success'])) {
+          state.isSupported = false;
+          state.message = String((result && (result.msg || result.message))
+            || (desired ? '官网尚未确认点赞，请稍后重试' : '官网尚未确认取消点赞，请稍后重试'));
+          return state;
+        }
+        state.likeCount = adjustedCount(state.likeCount, nextLiked ? 1 : -1);
+      }
       state = {
-        isSupported: verified.isLiked === !!desired,
+        isSupported: true,
         canLike: true,
-        isLiked: verified.isLiked,
-        likeCount: verified.likeCount,
+        isLiked: nextLiked,
+        likeCount: state.likeCount,
         canTrack: true,
         isTracked: state.isTracked,
         message: null
       };
       interactionCache[id] = state;
-      if (!state.isSupported) {
-        state.message = desired ? '官网尚未确认点赞，请稍后重试' : '官网尚未确认取消点赞，请稍后重试';
-        return state;
-      }
       state.message = state.isLiked ? '已喜欢这部漫画' : '已取消喜欢';
       return state;
     },
