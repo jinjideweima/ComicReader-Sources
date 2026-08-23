@@ -43,7 +43,7 @@ which ComicReader shows both during review and after installation.
 | 拷贝漫画 | `copymanga` | Mature | Discovery/topics/rankings, search, cloud favorites/history, reading/downloads |
 | E-Hentai | `ehentai` | Adult | Advanced search, favorites/watched, ratings, comments, tags, My Settings, account tools, news/bounties, archives/torrents |
 | MangaBZ | `mangabz` | Mature | Editorial home/search/rankings, favorites/history, batch shelf management, reading/downloads |
-| 禁漫天堂 | `jmcomic` | Adult | Ad-free editorial home, search/rankings, comments, signed native login, favorites/history, image restoration, reading/downloads |
+| 禁漫天堂 | `jmcomic` | Adult | Ad-free editorial home, search/rankings, full comments/replies, verified account actions, profile editing, short-video preview metadata, image restoration, reading/downloads |
 
 Account features require a ComicReader build that supports signed declarative
 authentication manifests. Passwords are submitted by native code only for the

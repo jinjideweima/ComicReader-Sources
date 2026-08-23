@@ -146,6 +146,61 @@
     return apiRequest(path, 'GET', null, API_TOKEN_SECRET, '').data;
   }
 
+  // The native bridge executes these signed requests concurrently. This keeps
+  // comprehensive comment aggregation practical for long-running series while
+  // preserving the same response validation/decryption as apiGet.
+  function apiGetBatch(paths) {
+    paths = Array.isArray(paths) ? paths : [];
+    if (!paths.length) return [];
+    if (typeof requestAll !== 'function') {
+      return paths.map(function (path) {
+        try { return apiGet(path); } catch (_) { return null; }
+      });
+    }
+
+    var domains = prioritizeDomain(savedDomains(), storage.get('active_api_domain'));
+    for (var domainIndex = 0; domainIndex < domains.length; domainIndex++) {
+      var host = domains[domainIndex];
+      var ts = timestamp();
+      var headers = {
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Encoding': 'gzip, deflate',
+        'User-Agent': API_UA,
+        'token': crypto.md5(ts + API_TOKEN_SECRET),
+        'tokenparam': ts + ','
+      };
+      var responses = requestAll(paths.map(function (path) {
+        return {
+          url: 'https://' + host + path,
+          method: 'GET',
+          headers: headers,
+          timeout: 12
+        };
+      })) || [];
+      var decoded = responses.map(function (response) {
+        try {
+          if (!response || response.error || Number(response.status) < 200 || Number(response.status) >= 300) return null;
+          var outer = JSON.parse(response.body || '{}');
+          if (Number(outer.code) !== 200) return null;
+          var payload = decodedPayload(outer, ts);
+          return payload && payload.error ? null : payload;
+        } catch (_) {
+          return null;
+        }
+      });
+      if (decoded.some(function (value) { return value !== null; })) {
+        storage.set('active_api_domain', host);
+        return decoded.map(function (value, index) {
+          if (value !== null) return value;
+          try { return apiGet(paths[index]); } catch (_) { return null; }
+        });
+      }
+    }
+    return paths.map(function (path) {
+      try { return apiGet(path); } catch (_) { return null; }
+    });
+  }
+
   function apiPost(path, fields) {
     return apiRequest(path, 'POST', fields, API_TOKEN_SECRET, appVersion()).data;
   }
@@ -228,6 +283,13 @@
     return imageHost() + (value.charAt(0) === '/' ? value : '/' + value);
   }
 
+  function absoluteUserPhoto(path) {
+    var value = String(path || '').trim();
+    if (!value) return null;
+    if (/^https?:/i.test(value) || value.charAt(0) === '/') return absoluteMedia(value);
+    return imageHost() + '/media/users/' + value;
+  }
+
   function albumCover(id, highResolution) {
     return imageHost() + '/media/albums/' + id + (highResolution ? '' : '_3x4') + '.jpg';
   }
@@ -286,7 +348,7 @@
     if (item.total_views !== undefined && item.total_views !== null) info.views = String(item.total_views);
     if (item.total_photos !== undefined && item.total_photos !== null) info.pages = String(item.total_photos);
     if (item.comment_total !== undefined && item.comment_total !== null) info.comments = String(item.comment_total);
-    if (item.addtime) info.listedAt = dateText(item.addtime);
+    if (item.addtime) info.updatedAt = dateText(item.addtime);
     if (item.update_at) info.updatedAt = dateText(item.update_at);
     return {
       id: id,
@@ -299,6 +361,36 @@
       genres: genres,
       status: genres.indexOf('完結') >= 0 || genres.indexOf('完结') >= 0 ? 'completed' : 'unknown',
       info: info
+    };
+  }
+
+  function aggregateSeriesMetrics(item) {
+    var series = Array.isArray(item.series) ? item.series : [];
+    var ids = uniqueText(series.map(function (chapter) { return chapter && chapter.id; }));
+    if (ids.length <= 1) return null;
+    var albums = apiGetBatch(ids.map(function (id) {
+      return '/album?id=' + encodeURIComponent(id);
+    })).filter(function (album) { return album && album.id; });
+    if (!albums.length) return null;
+    var views = 0;
+    var comments = 0;
+    var earliest = null;
+    var latest = null;
+    albums.forEach(function (album) {
+      views += Math.max(0, Number(album.total_views || 0));
+      comments += Math.max(0, Number(album.comment_total || 0));
+      var timestamp = Number(album.addtime || album.update_at || 0);
+      if (timestamp > 0) {
+        earliest = earliest === null ? timestamp : Math.min(earliest, timestamp);
+        latest = latest === null ? timestamp : Math.max(latest, timestamp);
+      }
+    });
+    return {
+      views: views,
+      comments: comments,
+      listedAt: earliest,
+      updatedAt: latest,
+      chapterCount: albums.length
     };
   }
 
@@ -317,10 +409,20 @@
     var series = Array.isArray(item.series) ? item.series : [];
     result.info.contentCount = String(Math.max(series.length, 1));
     result.info.uploader = item.uploader || item.username || '未公开';
-    result.info.listedAt = dateText(item.addtime) || originalInfo.listedAt || originalInfo.posted || '';
-    result.info.updatedAt = dateText(item.update_at) || originalInfo.updatedAt || originalInfo.updated || result.info.listedAt;
+    var aggregate = aggregateSeriesMetrics(item);
+    if (aggregate) {
+      result.info.listedAt = dateText(aggregate.listedAt) || '';
+      result.info.updatedAt = dateText(aggregate.updatedAt) || result.info.listedAt;
+      result.info.views = String(aggregate.views);
+      result.info.comments = String(aggregate.comments);
+      result.info.metricScope = '全系列官网聚合';
+    } else {
+      result.info.listedAt = dateText(item.addtime) || originalInfo.listedAt || originalInfo.posted || '';
+      result.info.updatedAt = dateText(item.update_at) || originalInfo.updatedAt || originalInfo.updated || result.info.listedAt;
+    }
     result.info.isLiked = item.liked === true || String(item.liked) === '1' ? 'true' : 'false';
     result.info.isFavorited = item.is_favorite === true || String(item.is_favorite) === '1' ? 'true' : 'false';
+    result.info.shortVideoURL = 'https://18comic.vip/media/JmShortVideo/' + result.id + '.mp4';
 
     var groups = [
       { id: 'works', title: '作品', values: uniqueText(item.works) },
@@ -338,6 +440,24 @@
       result.recommendations = mapAlbums(randomItems, 12).filter(function (manga) { return manga.id !== result.id; });
     } catch (_) {
       result.recommendations = [];
+    }
+    try {
+      var promote = apiGet('/promote') || [];
+      var library = findPromote(promote, '1001') || { content: [] };
+      var editorial = Array.isArray(library.content) ? library.content : [];
+      var terms = uniqueText([].concat(item.works || [], item.actors || [], item.tags || [], item.author || []))
+        .map(function (value) { return value.toLowerCase(); })
+        .filter(function (value) { return value.length >= 2; });
+      var relatedEditorial = editorial.filter(function (entry) {
+        var haystack = JSON.stringify(entry || {}).toLowerCase();
+        return terms.some(function (term) { return haystack.indexOf(term) >= 0; });
+      });
+      if (!relatedEditorial.length) relatedEditorial = editorial;
+      result.relatedArticles = relatedEditorial.slice(0, 12).map(function (entry) {
+        return mapEditorial(entry, 'library');
+      });
+    } catch (_) {
+      result.relatedArticles = [];
     }
     return result;
   }
@@ -464,64 +584,178 @@
     return doc ? doc.text().trim() : String(value || '').replace(/<[^>]+>/g, '').trim();
   }
 
-  function flattenComments(list) {
+  function commentBadgeURLs(expinfo) {
+    var badges = expinfo && Array.isArray(expinfo.badges) ? expinfo.badges : [];
+    return badges.map(function (badge) {
+      var value = typeof badge === 'string'
+        ? badge
+        : badge && (badge.image || badge.icon || badge.photo || badge.pic || badge.url || badge.path);
+      value = String(value || '').trim();
+      if (!value) return null;
+      if (!/^(?:https?:|\/)/i.test(value)) {
+        return 'https://18comic.vip/static/resources/files/medal%202.0/' + encodeURIComponent(value) + '.png';
+      }
+      if (value.indexOf('/static/') === 0) return 'https://18comic.vip' + value;
+      return absoluteMedia(value);
+    }).filter(Boolean);
+  }
+
+  function commentChapterContext(id) {
+    var titles = {};
+    var chapterIDs = [String(id)];
+    try {
+      var detail = apiGet('/album?id=' + encodeURIComponent(id)) || {};
+      var series = Array.isArray(detail.series) ? detail.series : [];
+      series.forEach(function (chapter, index) {
+        var chapterID = String(chapter.id || (index === 0 ? id : ''));
+        if (!chapterID) return;
+        if (chapterIDs.indexOf(chapterID) < 0) chapterIDs.push(chapterID);
+        titles[chapterID] = String(chapter.name || ('第 ' + Number(chapter.sort || index + 1) + ' 话'));
+      });
+      if (!titles[id] && series.length) {
+        titles[id] = String(series[0].name || '第 1 话');
+      }
+    } catch (_) {}
+    return { titles: titles, chapterIDs: chapterIDs };
+  }
+
+  function flattenComments(list, chapterTitles) {
     var output = [];
     function add(item, reply) {
       var body = stripHTML(item.content || item.comment || '');
       if (!body) body = '[图片评论]';
+      var expinfo = item.expinfo || {};
+      var chapterID = String(item.AID || item.aid || '');
+      var rawChapterTitle = chapterTitles[chapterID] || item.chapter_name || item.name || '';
+      var chapterTitle = /^JM\d+$/i.test(String(rawChapterTitle)) ? '' : String(rawChapterTitle);
       output.push({
         id: String(item.CID || item.id || output.length),
         author: String(item.nickname || item.username || '匿名用户'),
         dateText: item.addtime ? String(item.addtime) : null,
         body: body,
-        score: item.likes !== undefined ? String(item.likes) : null,
+        score: null,
         isUploader: false,
-        avatarURL: item.photo ? absoluteMedia(item.photo) : null,
+        avatarURL: absoluteUserPhoto(item.photo),
+        authorUsername: item.username ? String(item.username) : null,
+        levelText: expinfo.level !== undefined ? 'Lv.' + String(expinfo.level) : null,
+        levelTitle: expinfo.level_name ? String(expinfo.level_name) : null,
+        badgeImageURLs: commentBadgeURLs(expinfo),
         isSpoiler: item.spoiler === true || String(item.spoiler) === '2',
         parentID: item.parent_CID ? String(item.parent_CID) : null,
-        isReply: !!reply
+        isReply: !!reply,
+        chapterID: chapterID || null,
+        chapterTitle: chapterTitle || null
       });
-      (item.replys || []).forEach(function (child) { add(child, true); });
+      (item.replys || item.replies || []).forEach(function (child) { add(child, true); });
     }
     (list || []).forEach(function (item) { add(item, false); });
     return output;
   }
 
   function commentsForAlbum(id) {
-    var output = [];
-    var total = null;
-    var loadedRoots = 0;
-    for (var page = 1; page <= 50; page++) {
-      var data = apiGet('/forum?aid=' + encodeURIComponent(id) + '&mode=all&page=' + page) || {};
-      var list = data.list || [];
-      if (total === null && data.total !== undefined) total = Number(data.total);
-      if (!list.length) break;
-      loadedRoots += list.length;
-      output = output.concat(flattenComments(list));
-      if ((total !== null && loadedRoots >= total) || list.length < 10) break;
+    var context = commentChapterContext(id);
+    var chapterIDs = context.chapterIDs;
+    var firstPagePaths = chapterIDs.map(function (chapterID) {
+      return '/forum?aid=' + encodeURIComponent(chapterID) + '&mode=manhua&page=1';
+    });
+    var firstPages = apiGetBatch(firstPagePaths);
+    var allLists = [];
+    var remainingPaths = [];
+    firstPages.forEach(function (data, index) {
+      data = data || {};
+      if (Array.isArray(data.list) && data.list.length) allLists.push(data.list);
+      var total = Math.max(0, Number(data.total || 0));
+      var pageCount = Math.min(250, Math.ceil(total / 10));
+      for (var page = 2; page <= pageCount && remainingPaths.length < 500; page++) {
+        remainingPaths.push('/forum?aid=' + encodeURIComponent(chapterIDs[index]) + '&mode=manhua&page=' + page);
+      }
+    });
+
+    // Fetch the rest in bounded batches so one giant series cannot create an
+    // unbounded native request array. The bridge itself caps active requests.
+    for (var offset = 0; offset < remainingPaths.length; offset += 120) {
+      apiGetBatch(remainingPaths.slice(offset, offset + 120)).forEach(function (data) {
+        if (data && Array.isArray(data.list) && data.list.length) allLists.push(data.list);
+      });
     }
+
+    var seen = {};
+    var output = [];
+    allLists.forEach(function (list) {
+      flattenComments(list, context.titles).forEach(function (comment) {
+        if (seen[comment.id]) return;
+        seen[comment.id] = true;
+        output.push(comment);
+      });
+    });
     return output;
+  }
+
+  var interactionCache = {};
+
+  function isEnabledValue(value) {
+    if (value === true || value === 1) return true;
+    var text = String(value === undefined || value === null ? '' : value).toLowerCase();
+    return text === '1' || text === 'true' || text === 'yes' || text === 'on';
+  }
+
+  function albumInteraction(id) {
+    var detail = apiGet('/album?id=' + encodeURIComponent(id)) || {};
+    return {
+      isLiked: isEnabledValue(detail.liked),
+      likeCount: detail.likes === undefined ? null : String(detail.likes),
+      isFavorited: isEnabledValue(detail.is_favorite)
+    };
+  }
+
+  function trackingInteraction(id) {
+    var tracking = apiGet('/album_sertracking?id=' + encodeURIComponent(id));
+    if (isEnabledValue(tracking)) return true;
+    tracking = tracking || {};
+    return isEnabledValue(tracking.is_tracking)
+      || isEnabledValue(tracking.is_tracked)
+      || isEnabledValue(tracking.tracked)
+      || isEnabledValue(tracking.status);
+  }
+
+  function confirmAlbumInteraction(id, field, desired) {
+    var latest = null;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) sleep(attempt * 220);
+      latest = albumInteraction(id);
+      if (latest[field] === desired) break;
+    }
+    return latest;
+  }
+
+  function confirmTrackingInteraction(id, desired) {
+    var latest = false;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) sleep(attempt * 220);
+      latest = trackingInteraction(id);
+      if (latest === desired) break;
+    }
+    return latest;
   }
 
   function interactionState(manga) {
     var id = albumID(manga.id || manga.url);
-    var detail = apiGet('/album?id=' + encodeURIComponent(id)) || {};
+    var album = albumInteraction(id);
     var tracked = false;
     try {
-      var tracking = apiGet('/album_sertracking?id=' + encodeURIComponent(id)) || {};
-      tracked = tracking === true || String(tracking) === 'true'
-        || tracking.is_tracking === true || tracking.is_tracked === true
-        || tracking.tracked === true || String(tracking.status || '') === '1';
+      tracked = trackingInteraction(id);
     } catch (_) {}
-    return {
+    var state = {
       isSupported: true,
       canLike: true,
-      isLiked: detail.liked === true || String(detail.liked) === '1',
-      likeCount: detail.likes === undefined ? null : String(detail.likes),
+      isLiked: album.isLiked,
+      likeCount: album.likeCount,
       canTrack: true,
       isTracked: tracked,
       message: null
     };
+    interactionCache[id] = state;
+    return state;
   }
 
   function accountProfile() {
@@ -605,7 +839,7 @@
       return {
         isSupported: true,
         title: '个人资料',
-        introduction: '只读展示站点资料。密码、头像上传和关系资料暂不在 App 内修改，避免误覆盖。',
+        introduction: '可编辑站点公开资料；密码与头像上传仍保持只读，避免误覆盖账号凭据或媒体文件。',
         sections: [{ id: 'profile', title: '公开资料', metrics: metricsFromObject(editable, 'profile', 28) }],
         links: [], message: null
       };
@@ -676,10 +910,10 @@
   }
 
   function favoriteState(manga) {
-    var detail = apiGet('/album?id=' + encodeURIComponent(albumID(manga.id || manga.url))) || {};
+    var detail = albumInteraction(albumID(manga.id || manga.url));
     return {
       isSupported: true,
-      isFavorited: detail.is_favorite === true,
+      isFavorited: detail.isFavorited,
       category: null,
       categories: [],
       note: null,
@@ -688,10 +922,18 @@
   }
 
   function setFavoriteValue(manga, desired) {
+    var id = albumID(manga.id || manga.url);
     var state = favoriteState(manga);
     if (state.isFavorited !== desired) {
-      apiPost('/favorite', { aid: albumID(manga.id || manga.url) });
-      state.isFavorited = desired;
+      apiPost('/favorite', { aid: id });
+      var confirmed = confirmAlbumInteraction(id, 'isFavorited', desired).isFavorited;
+      if (confirmed !== desired) {
+        state.isSupported = false;
+        state.isFavorited = confirmed;
+        state.message = desired ? '官网尚未确认收藏，请稍后重试' : '官网尚未确认取消收藏，请稍后重试';
+        return state;
+      }
+      state.isFavorited = confirmed;
     }
     state.message = desired ? '已加入禁漫天堂收藏' : '已从禁漫天堂收藏移除';
     return state;
@@ -901,17 +1143,30 @@
       var id = albumID(manga.id || manga.url);
       var text = String(body || '').trim();
       if (!text) return { isSupported: true, didSubmit: false, message: '评论不能为空。', comments: null };
-      apiPost('/comment', {
+      var submitted = apiPost('/comment', {
         aid: id,
         comment: text,
         status: spoiler ? 'true' : 'false',
-        comment_id: parentID || ''
+        comment_id: parentID || '0'
       });
+      if (submitted && submitted.status !== undefined) {
+        var submitStatus = String(submitted.status).toLowerCase();
+        if (submitStatus !== 'ok' && submitStatus !== '1' && submitStatus !== 'true') {
+          return {
+            isSupported: true,
+            didSubmit: false,
+            message: String(submitted.msg || submitted.message || '官网没有确认评论发送。'),
+            comments: null
+          };
+        }
+      }
       return {
         isSupported: true,
         didSubmit: true,
         message: spoiler ? '剧透评论已发送' : '评论已发送',
-        comments: commentsForAlbum(id)
+        // Do not synchronously reload hundreds of comment threads here. The
+        // native UI dismisses immediately and refreshes the list in background.
+        comments: null
       };
     },
 
@@ -943,6 +1198,22 @@
       var profile = accountProfile();
       var favorites = apiGet('/favorite?page=1') || {};
       var history = apiGet('/watch_list?page=1') || {};
+      var progressMetrics = [
+        { id: 'title', title: '称号', value: profileValue(profile, ['title', 'level_name'], '—') },
+        { id: 'coin', title: 'JCOINS', value: profileValue(profile, ['coin'], '—') },
+        { id: 'level', title: '等级', value: profileValue(profile, ['level'], '—') },
+        { id: 'experience', title: '经验', value: profileValue(profile, ['exp'], '—') + ' / ' + profileValue(profile, ['nextLevelExp'], '—') },
+        { id: 'medals', title: '勋章', value: profileCollectionText(profile, ['badges', 'medals']) },
+        { id: 'favorite-capacity', title: '可收藏数', value: profileValue(profile, ['album_favorites'], '—') + ' / ' + profileValue(profile, ['album_favorites_max'], '—') },
+        { id: 'charge', title: '充能', value: profileValue(profile, ['charge'], '—') },
+        { id: 'energy', title: 'J罐', value: profileValue(profile, ['energy'], '—') }
+      ];
+      var combatPower = profileValue(profile, ['combat_power', 'battle_power'], '');
+      if (combatPower) progressMetrics.push({ id: 'combat-power', title: '战斗力', value: combatPower });
+      try {
+        var tagStats = JSON.parse(profileValue(profile, ['tag_stats', 'tag_power'], '{}'));
+        progressMetrics = progressMetrics.concat(metricsFromObject(tagStats, 'tag-power', 12));
+      } catch (_) {}
       return {
         isSupported: true,
         sections: [
@@ -953,15 +1224,7 @@
             { id: 'invite', title: '邀请码', value: profileValue(profile, ['invite_code'], '未公开') },
             { id: 'api', title: '数据线路', value: storage.get('active_api_domain') || '自动选择' }
           ] },
-          { id: 'progress', title: '等级与资产', metrics: [
-            { id: 'title', title: '称号', value: profileValue(profile, ['title', 'level_name'], '—') },
-            { id: 'coin', title: 'JCOINS', value: profileValue(profile, ['coin'], '—') },
-            { id: 'level', title: '等级', value: profileValue(profile, ['level'], '—') },
-            { id: 'experience', title: '经验', value: profileValue(profile, ['exp'], '—') + ' / ' + profileValue(profile, ['nextLevelExp'], '—') },
-            { id: 'medals', title: '勋章', value: profileCollectionText(profile, ['badges', 'medals']) },
-            { id: 'favorite-capacity', title: '可收藏数', value: profileValue(profile, ['album_favorites'], '—') + ' / ' + profileValue(profile, ['album_favorites_max'], '—') },
-            { id: 'energy', title: '充能', value: profileValue(profile, ['energy', 'charge'], '—') }
-          ] },
+          { id: 'progress', title: '等级与资产', metrics: progressMetrics },
           { id: 'library', title: '云端书架', metrics: [
             { id: 'favorites', title: '收藏漫画', value: String(favorites.total || (favorites.list || []).length || 0) },
             { id: 'history', title: '本页阅读记录', value: String((history.list || history || []).length || 0) }
@@ -972,9 +1235,31 @@
     },
 
     getAccountToolState: function (kind) { return accountToolState(String(kind || '')); },
-    performAccountAction: function (kind) {
+    performAccountAction: function (kind, payload) {
       var profile = accountProfile();
       var uid = profileValue(profile, ['uid'], '');
+      if (kind === 'updateProfile' && uid) {
+        var allowed = [
+          'nickName', 'lastName', 'firstName', 'birthday', 'relations', 'sexuality',
+          'website', 'birthPlace', 'city', 'country', 'occupation', 'company',
+          'school', 'aboutMe', 'infoHere', 'collections', 'ideal', 'erogenic',
+          'favorite', 'hate'
+        ];
+        var fields = {};
+        payload = payload || {};
+        allowed.forEach(function (key) {
+          if (payload[key] !== undefined && payload[key] !== null) fields[key] = String(payload[key]);
+        });
+        if (!Object.keys(fields).length) {
+          var emptyState = accountToolState('profile');
+          emptyState.message = '没有需要保存的资料字段。';
+          return emptyState;
+        }
+        apiPost('/useredit/' + encodeURIComponent(uid), fields);
+        var updatedState = accountToolState('profile');
+        updatedState.message = '个人资料已保存并重新读取。';
+        return updatedState;
+      }
       if (kind !== 'dailyCheckIn' || !uid) return accountToolState('daily');
       var daily = apiGet('/daily?user_id=' + encodeURIComponent(uid)) || {};
       var dailyID = daily.daily_id || daily.id || daily.DID || daily.activity_id;
@@ -998,16 +1283,46 @@
 
     getInteractionState: function (manga) { return interactionState(manga); },
     setLiked: function (manga, desired) {
-      var state = interactionState(manga);
+      var id = albumID(manga.id || manga.url);
+      var state = interactionCache[id] || interactionState(manga);
       if (state.isLiked !== !!desired) apiPost('/like', { id: albumID(manga.id || manga.url) });
-      state = interactionState(manga);
+      var verified = confirmAlbumInteraction(id, 'isLiked', !!desired);
+      state = {
+        isSupported: verified.isLiked === !!desired,
+        canLike: true,
+        isLiked: verified.isLiked,
+        likeCount: verified.likeCount,
+        canTrack: true,
+        isTracked: state.isTracked,
+        message: null
+      };
+      interactionCache[id] = state;
+      if (!state.isSupported) {
+        state.message = desired ? '官网尚未确认点赞，请稍后重试' : '官网尚未确认取消点赞，请稍后重试';
+        return state;
+      }
       state.message = state.isLiked ? '已喜欢这部漫画' : '已取消喜欢';
       return state;
     },
     setTracking: function (manga, desired) {
-      var state = interactionState(manga);
+      var id = albumID(manga.id || manga.url);
+      var state = interactionCache[id] || interactionState(manga);
       if (state.isTracked !== !!desired) apiPost('/album_sertracking', { id: albumID(manga.id || manga.url) });
-      state = interactionState(manga);
+      var verified = confirmTrackingInteraction(id, !!desired);
+      state = {
+        isSupported: verified === !!desired,
+        canLike: true,
+        isLiked: state.isLiked,
+        likeCount: state.likeCount,
+        canTrack: true,
+        isTracked: verified,
+        message: null
+      };
+      interactionCache[id] = state;
+      if (!state.isSupported) {
+        state.message = desired ? '官网尚未确认追更，请稍后重试' : '官网尚未确认关闭追更，请稍后重试';
+        return state;
+      }
       state.message = state.isTracked ? '已开启连载追踪' : '已关闭连载追踪';
       return state;
     },

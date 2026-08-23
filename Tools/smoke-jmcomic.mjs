@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import cryptoModule from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import vm from "node:vm";
 
 const repositoryRoot = new URL("../", import.meta.url);
@@ -69,7 +71,43 @@ globalThis.fetch = (url, options = {}) => {
   };
 };
 
-vm.runInThisContext(sourceCode, { filename: "sources/jmcomic/source.js" });
+// Match the App bridge's synchronous contract while letting curl perform the
+// underlying GET transfers concurrently. JMComic batch calls share headers.
+globalThis.requestAll = (requests = []) => {
+  if (!requests.length) return [];
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jmcomic-smoke-batch-"));
+  try {
+    const args = [
+      "--silent", "--show-error", "--location", "--compressed",
+      "--parallel", "--parallel-max", "16", "--max-time", "15",
+    ];
+    for (const [name, value] of Object.entries(requests[0]?.headers || {})) {
+      args.push("--header", `${name}: ${value}`);
+    }
+    const files = requests.map((request, index) => {
+      const output = path.join(directory, `${index}.response`);
+      args.push("--output", output, "--url", String(request.url));
+      return output;
+    });
+    try {
+      execFileSync("/usr/bin/curl", args, { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
+    } catch (_) {
+      // Keep successful transfer files; the source will treat missing entries
+      // as failures and exercise its normal host fallback.
+    }
+    return files.map((file) => fs.existsSync(file)
+      ? { status: 200, body: fs.readFileSync(file, "utf8"), headers: {} }
+      : { status: 0, body: "", headers: {}, error: "curl transfer failed" });
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+const instrumentedSourceCode = sourceCode.replace(
+  "globalThis.__source = {",
+  "globalThis.__smokeApiGet = apiGet; globalThis.__source = {",
+);
+vm.runInThisContext(instrumentedSourceCode, { filename: "sources/jmcomic/source.js" });
 const source = globalThis.__source;
 assert.ok(source, "source.js did not register globalThis.__source");
 
@@ -131,6 +169,37 @@ assert.equal(source.getChapterList(novelDetails).length, 0);
 
 const first = home.heroes[0].manga;
 const details = source.getMangaDetails(first);
+const rawAlbum = globalThis.__smokeApiGet(`/album?id=${details.id}`) || {};
+if (Array.isArray(rawAlbum.series) && rawAlbum.series.length > 1) {
+  assert.equal(details.info?.metricScope, "全系列官网聚合");
+  assert.ok(Number(details.info?.views || 0) >= Number(rawAlbum.total_views || 0));
+  assert.ok(Number(details.info?.comments || 0) >= Number(rawAlbum.comment_total || 0));
+}
+const commentModes = {};
+let firstCommentShape = null;
+for (const mode of ["manhua", "all", "album", "photo", "omitted"]) {
+  const modeQuery = mode === "omitted" ? "" : `&mode=${mode}`;
+  const page = globalThis.__smokeApiGet(`/forum?aid=${details.id}${modeQuery}&page=1`) || {};
+  const firstRoot = Array.isArray(page.list) ? page.list[0] : null;
+  if (!firstCommentShape && firstRoot) {
+    const firstReply = Array.isArray(firstRoot.replys) ? firstRoot.replys[0] : null;
+    firstCommentShape = {
+      rootKeys: Object.keys(firstRoot).sort(),
+      root: Object.fromEntries(Object.entries(firstRoot).filter(([key]) =>
+        !["content", "replys"].includes(key) && !/token|secret|password/i.test(key)
+      )),
+      replyKeys: firstReply ? Object.keys(firstReply).sort() : [],
+      reply: firstReply ? Object.fromEntries(Object.entries(firstReply).filter(([key]) =>
+        !["content", "replys"].includes(key) && !/token|secret|password/i.test(key)
+      )) : null,
+    };
+  }
+  commentModes[mode] = {
+    keys: Object.keys(page).sort(),
+    total: page.total ?? null,
+    firstPageRoots: Array.isArray(page.list) ? page.list.length : null,
+  };
+}
 assert.match(details.info?.jmID || "", /^JM\d+$/);
 assert.ok(Number(details.info?.contentCount || 0) >= 1, "detail content count is missing");
 assert.ok(Array.isArray(details.tagGroups), "detail tag groups are missing");
@@ -147,6 +216,9 @@ assert.ok(comments.every((comment) => typeof comment.isSpoiler === "boolean"), "
 const chapters = source.getChapterList(details);
 assert.ok(chapters.length >= 1, `JM${details.id} has no chapters`);
 const pages = source.getPageList(chapters[0]);
+const rawFirstChapter = globalThis.__smokeApiGet(`/chapter?id=${chapters[0].id}`) || {};
+const rawLastChapterAlbum = globalThis.__smokeApiGet(`/album?id=${chapters.at(-1).id}`) || {};
+const lastChapterComments = globalThis.__smokeApiGet(`/forum?aid=${chapters.at(-1).id}&mode=manhua&page=1`) || {};
 assert.ok(pages.length >= 1, `JM${details.id} has no pages`);
 assert.ok(pages.every((page, index) => page.index === index && /^https:\/\//.test(page.imageURL)));
 assert.ok(pages.every((page) => !page.imageTransform || page.imageTransform.segmentCount > 1));
@@ -161,7 +233,42 @@ console.log(JSON.stringify({
   chapterCount: chapters.length,
   pageCount: pages.length,
   transformedPageCount: pages.filter((page) => page.imageTransform).length,
+  firstPage: {
+    imageURL: pages[0]?.imageURL || null,
+    segmentCount: pages[0]?.imageTransform?.segmentCount || 0,
+  },
+  rawAlbumFields: {
+    keys: Object.keys(rawAlbum).sort(),
+    addtime: rawAlbum.addtime ?? null,
+    update_at: rawAlbum.update_at ?? null,
+    total_views: rawAlbum.total_views ?? null,
+    likes: rawAlbum.likes ?? null,
+    comment_total: rawAlbum.comment_total ?? null,
+    firstSeries: Array.isArray(rawAlbum.series) ? rawAlbum.series[0] ?? null : null,
+    lastSeries: Array.isArray(rawAlbum.series) ? rawAlbum.series.at(-1) ?? null : null,
+  },
+  detailMetrics: {
+    listedAt: details.info?.listedAt ?? null,
+    updatedAt: details.info?.updatedAt ?? null,
+    views: details.info?.views ?? null,
+    comments: details.info?.comments ?? null,
+    metricScope: details.info?.metricScope ?? null,
+  },
+  rawFirstChapterFields: Object.fromEntries(Object.entries(rawFirstChapter).filter(([key]) =>
+    key !== "images" && !/token|secret|password/i.test(key)
+  )),
+  rawLastChapterAlbum: Object.fromEntries(Object.entries(rawLastChapterAlbum).filter(([key]) =>
+    ["id", "series_id", "name", "addtime", "update_at", "total_views", "likes", "comment_total"].includes(key)
+  )),
+  commentModes,
+  lastChapterCommentPage: {
+    chapterID: chapters.at(-1).id,
+    total: lastChapterComments.total ?? null,
+    firstPageRoots: Array.isArray(lastChapterComments.list) ? lastChapterComments.list.length : null,
+  },
+  firstCommentShape,
   commentCount: comments.length,
+  rootCommentCount: comments.filter((comment) => comment.isReply !== true).length,
   searchCount: search.items.length,
   fullListCounts,
   communityCount: communityItems.length,

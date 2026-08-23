@@ -5,6 +5,11 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade JMComic to 1.2.0: preserve all comment pages and native commenter
+  metadata, make comment submission non-blocking, verify favorite/like/tracking
+  mutations, aggregate series-wide official dates/views/comment totals, expose
+  related editorials and short-video metadata, and add allowlisted native
+  profile editing.
 - Add the signed JMComic (禁漫天堂) 1.0.0 source with a ten-section ad-free
   editorial home, weekly picks, community/library/novel previews, search and
   rankings, comments, native encrypted login, favorites/history, chapter image
