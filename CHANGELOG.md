@@ -5,6 +5,10 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade JMComic to 1.4.2: replace Cloudflare-blocked community and library
+  webpage scraping with the official blog and creator APIs, restore the three
+  switchable editorial channels with rich article details, load current square
+  library works and proxy-CDN covers, and reduce large comment-page latency.
 - Upgrade JMComic to 1.4.1: reflect the website's one-way like behavior instead
   of exposing a fake unlike toggle, and confirm favorite/like mutations by
   reading the official album state back before reporting success.

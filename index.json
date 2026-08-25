@@ -678,6 +678,7 @@
         "*.jmdanjonproxy.vip",
         "*.jmapiproxy1.cc",
         "*.jmapiproxy2.cc",
+        "*.jmapiproxy3.cc",
         "*.jmapinodeudzn.net",
         "*.bytepluses.com"
       ],
@@ -801,14 +802,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
-      "sha256" : "5bd4daa550b25ac35ff068d98191eff0111ec2c650bfe6e40b4baf293644c471",
+      "sha256" : "d3936b4aa79e28bc342f19448a1aa4bdb3ef84ea7baa70ac37062894ba3fd59b",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "IxXhoUVTVVFzwQv4z3RIG87g0HXalTqmmdpehwbYkjOW6IxnY4/xmmUEEDBBxDmJhlUbdyZUhoyb0HQErwcvCQ=="
+        "value" : "rURRA11mY3Ta+p2YJ6AAeug8rQ4NN2MbrB13tRgP66gVyvndUve6u+OACB6HGXucEXUM1Q9MbxEIQcIS1o3hBg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.4.1"
+      "version" : "1.4.2"
     }
   ]
 }

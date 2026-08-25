@@ -247,7 +247,7 @@
     var host = match[1].toLowerCase();
     var suffixes = [
       '.jmdanjonproxy.xyz', '.jmdanjonproxy.vip', '.jmapiproxy1.cc',
-      '.jmapiproxy2.cc', '.jmapinodeudzn.net', '.18comic.vip'
+      '.jmapiproxy2.cc', '.jmapiproxy3.cc', '.jmapinodeudzn.net', '.18comic.vip'
     ];
     if (suffixes.some(function (suffix) { return host === suffix.slice(1) || host.slice(-suffix.length) === suffix; })) {
       return value;
@@ -369,11 +369,11 @@
     var value = String(path || '').trim();
     if (!value) return null;
     if (/^https?:\/\//i.test(value)) {
-      var resolved = websiteURL(value);
-      if (!resolved) return null;
-      var parsed = resolved.match(/^https:\/\/[^/]+(\/[^?#]*)?/i);
-      if (!parsed || !parsed[1] || parsed[1] === '/') return null;
-      return resolved;
+      var parsed = value.replace(/^http:/i, 'https:').match(/^(https:\/\/[^/]+)(\/[^?#]*)?(?:[?#].*)?$/i);
+      if (!parsed || !parsed[2] || parsed[2] === '/') return null;
+      var trustedOrigin = allowedDynamicImageHost(parsed[1]);
+      if (!trustedOrigin) return null;
+      return trustedOrigin + parsed[2];
     }
     return LIBRARY_MEDIA_BASE + (value.charAt(0) === '/' ? value : '/' + value);
   }
@@ -583,14 +583,17 @@
     var info = { contentKind: kind };
     if (item.likes !== undefined) info.likes = String(item.likes);
     if (item.update_at) info.updatedAt = String(item.update_at);
+    if (item.work_date) info.updatedAt = String(item.work_date);
+    if (item.platform_name) info.platform = String(item.platform_name);
+    if (item.author_id) info.authorID = String(item.author_id);
     return {
       id: kind + ':' + id,
       url: path,
-      title: String(item.name || item.title || id),
+      title: String(item.work_title || item.name || item.title || id).replace(/\s+/g, ' ').trim(),
       coverURL: kind === 'library'
-        ? libraryMedia(item.image || item.pic_s || item.cover || '')
+        ? libraryMedia(item.work_image || item.image || item.pic_s || item.cover || '')
         : absoluteMedia(item.image || item.pic_s || ''),
-      author: firstText(item.author),
+      author: firstText(item.author_name || item.author),
       genres: [kind === 'novel' ? '小说' : '创作者书库'],
       status: 'unknown',
       info: info
@@ -601,6 +604,76 @@
     if (channel === 'raiders') return '游戏文库';
     if (channel === 'sexytalk') return '西斯话题';
     return '绅夜食堂';
+  }
+
+  function blogChannel(item, fallback) {
+    var category = item && item.category && typeof item.category === 'object' ? item.category : {};
+    var channel = String(category.slug || fallback || 'dinner').trim();
+    return channel === 'raiders' || channel === 'sexytalk' ? channel : 'dinner';
+  }
+
+  function blogCover(item) {
+    var value = String((item && item.photo) || '').trim();
+    if (!value || (!/^https?:\/\//i.test(value) && value.charAt(0) !== '/')) return null;
+    return absoluteMedia(value);
+  }
+
+  function mapBlogEditorial(item, fallbackChannel) {
+    item = item || {};
+    var id = String(item.id || '');
+    var channel = blogChannel(item, fallbackChannel);
+    var tags = stringList(item.tags).filter(function (tag) { return !!String(tag || '').trim(); });
+    var plain = stripHTML(String(item.content || '')).replace(/\s+/g, ' ').trim();
+    var info = {
+      contentKind: 'article',
+      editorialChannel: channel,
+      editorialTitle: editorialChannelTitle(channel),
+      blogID: id
+    };
+    if (item.date) info.listedAt = String(item.date);
+    if (item.total_views !== undefined) info.views = String(item.total_views);
+    if (item.total_comments !== undefined) info.comments = String(item.total_comments);
+    if (item.total_likes !== undefined) info.likes = String(item.total_likes);
+    return {
+      id: 'article:' + id,
+      url: '/blog/' + id,
+      title: String(item.title || id).replace(/\s+/g, ' ').trim(),
+      coverURL: blogCover(item),
+      author: firstText(item.nickname || item.username),
+      description: plain ? plain.slice(0, 280) : null,
+      genres: [editorialChannelTitle(channel)].concat(tags),
+      status: 'unknown',
+      info: info
+    };
+  }
+
+  function blogListResult(data, channel, page) {
+    data = data && typeof data === 'object' ? data : {};
+    var rawItems = Array.isArray(data.list) ? data.list : [];
+    if (channel === 'sexytalk') {
+      rawItems = rawItems.filter(function (item) { return blogChannel(item, '') === 'sexytalk'; });
+    }
+    var count = Math.max(0, Number(data.count || data.total || 0));
+    return {
+      items: rawItems.map(function (item) { return mapBlogEditorial(item, channel); }),
+      hasNextPage: Number(page || 1) * 12 < count,
+      total: count
+    };
+  }
+
+  function editorialWebsitePage(channel, page) {
+    page = Math.max(1, Number(page || 1));
+    var path = '/blogs/' + channel + (page > 1 ? '?page=' + page : '');
+    var doc = websiteDocument(path);
+    var items = parseEditorialCards(doc, channel);
+    var hasNext = false;
+    if (doc && typeof doc.select === 'function') {
+      doc.select('a[href*="?page="]').forEach(function (anchor) {
+        var href = anchor.attr('abs:href') || anchor.attr('href') || '';
+        if (new RegExp('[?&]page=' + (page + 1) + '(?:&|$)').test(String(href))) hasNext = true;
+      });
+    }
+    return { items: items, hasNextPage: hasNext };
   }
 
   function parseEditorialCards(root, channel, limit) {
@@ -643,20 +716,54 @@
 
   function editorialPage(channel, page) {
     page = Math.max(1, Number(page || 1));
-    var path = '/blogs/' + channel + (page > 1 ? '?page=' + page : '');
-    var doc = websiteDocument(path);
-    var items = parseEditorialCards(doc, channel);
-    var hasNext = false;
-    if (doc && typeof doc.select === 'function') {
-      doc.select('a[href*="?page="]').forEach(function (anchor) {
-        var href = anchor.attr('abs:href') || anchor.attr('href') || '';
-        if (new RegExp('[?&]page=' + (page + 1) + '(?:&|$)').test(String(href))) hasNext = true;
+    try {
+      if (channel === 'dinner' || channel === 'raiders') {
+        var direct = apiGet('/blogs?page=' + page + '&blog_type=' + encodeURIComponent(channel)) || {};
+        return blogListResult(direct, channel, page);
+      }
+
+      // The current mobile client has no dedicated 西斯话题 tab. Its API
+      // returns dinner + sexytalk together for an unrecognised blog_type, so
+      // scan a small, non-overlapping three-page window and retain only the
+      // official sexytalk category. This keeps pagination incremental while
+      // avoiding the Cloudflare-protected website list.
+      var firstRemotePage = (page - 1) * 3 + 1;
+      var paths = [firstRemotePage, firstRemotePage + 1, firstRemotePage + 2].map(function (remotePage) {
+        return '/blogs?page=' + remotePage + '&blog_type=all';
       });
+      var payloads = apiGetBatch(paths);
+      var rawItems = [];
+      var total = 0;
+      payloads.forEach(function (payload) {
+        if (!payload || typeof payload !== 'object') return;
+        total = Math.max(total, Number(payload.count || payload.total || 0));
+        (payload.list || []).forEach(function (item) {
+          if (blogChannel(item, '') === 'sexytalk') rawItems.push(item);
+        });
+      });
+      return {
+        items: rawItems.map(function (item) { return mapBlogEditorial(item, 'sexytalk'); }),
+        hasNextPage: (firstRemotePage + 2) * 12 < total
+      };
+    } catch (_) {
+      return editorialWebsitePage(channel, page);
     }
-    return { items: items, hasNextPage: hasNext };
+  }
+
+  function creatorWorkPage(page) {
+    page = Math.max(1, Number(page || 1));
+    var payload = apiGet('/creator_work?page=' + page + '&search_value=&lang=&source=') || {};
+    if (payload && payload.data && typeof payload.data === 'object') payload = payload.data;
+    var rawItems = Array.isArray(payload.content) ? payload.content : [];
+    var total = Math.max(0, Number(payload.total || 0));
+    return {
+      items: rawItems.map(function (item) { return mapEditorial(item, 'library'); }),
+      hasNextPage: page * 30 < total
+    };
   }
 
   function editorialPromotePage(kind, promoteID, page) {
+    if (kind === 'library') return creatorWorkPage(page);
     var data = apiGet('/promote_list?id=' + encodeURIComponent(promoteID) + '&page=' + Number(page || 1)) || {};
     var rawItems = Array.isArray(data) ? data : (data.list || data.content || []);
     var items = rawItems.map(function (item) { return mapEditorial(item, kind); });
@@ -723,6 +830,42 @@
 
   function parseArticleDetails(manga) {
     var id = String(manga.id || manga.url || '').replace(/^article:/, '').replace(/\D/g, '');
+    try {
+      var payload = apiGet('/blog?id=' + encodeURIComponent(id)) || {};
+      var apiInfo = payload.info || {};
+      if (apiInfo.id || apiInfo.title || apiInfo.content) {
+        var apiResult = {};
+        Object.keys(manga).forEach(function (key) { apiResult[key] = manga[key]; });
+        var channel = blogChannel(apiInfo, (manga.info || {}).editorialChannel || 'dinner');
+        var tags = stringList(apiInfo.tags).filter(function (tag) { return !!String(tag || '').trim(); });
+        var content = String(apiInfo.content || '');
+        var contentRoot = parseHTML('<div>' + content + '</div>', WEBSITE_BASE);
+        var apiBlocks = articleBodyBlocks(contentRoot);
+        apiResult.id = 'article:' + id;
+        apiResult.url = '/blog/' + id;
+        apiResult.title = String(apiInfo.title || manga.title || id).replace(/\s+/g, ' ').trim();
+        apiResult.author = firstText(apiInfo.nickname || apiInfo.username || manga.author);
+        apiResult.genres = [editorialChannelTitle(channel)].concat(tags);
+        apiResult.articleBlocks = apiBlocks;
+        var apiDescription = stripHTML(content).replace(/\s+/g, ' ').trim();
+        apiResult.description = apiDescription ? apiDescription.slice(0, 500) : manga.description;
+        apiResult.info = apiResult.info || {};
+        apiResult.info.contentKind = 'article';
+        apiResult.info.blogID = id;
+        apiResult.info.editorialChannel = channel;
+        apiResult.info.editorialTitle = editorialChannelTitle(channel);
+        if (apiInfo.date) apiResult.info.listedAt = String(apiInfo.date);
+        if (apiInfo.total_views !== undefined) apiResult.info.views = String(apiInfo.total_views);
+        if (apiInfo.total_comments !== undefined) apiResult.info.comments = String(apiInfo.total_comments);
+        if (apiInfo.total_likes !== undefined) apiResult.info.likes = String(apiInfo.total_likes);
+        apiResult.relatedMangas = mapAlbums(payload.related_comics || [], 12);
+        apiResult.relatedArticles = (payload.related_blogs || []).map(function (item) {
+          return mapBlogEditorial(item, channel);
+        }).filter(function (item) { return item.id !== apiResult.id; }).slice(0, 12);
+        return apiResult;
+      }
+    } catch (_) {}
+
     var doc = websiteDocument('/blog/' + id);
     var article = doc.selectFirst('article');
     if (!article) throw new Error('官网没有返回文章正文');
@@ -767,6 +910,49 @@
 
   function parseLibraryDetails(manga) {
     var id = String(manga.id || manga.url || '').replace(/^library:/, '').replace(/\D/g, '');
+    try {
+      var apiPayload = apiGet('/creator_work_info_detail?id=' + encodeURIComponent(id)) || {};
+      if (apiPayload && apiPayload.data && typeof apiPayload.data === 'object') apiPayload = apiPayload.data;
+      if (apiPayload.id || apiPayload.name || Array.isArray(apiPayload.images)) {
+        var apiResult = {};
+        Object.keys(manga).forEach(function (key) { apiResult[key] = manga[key]; });
+        var apiBlocks = [];
+        var content = String(apiPayload.content || '');
+        if (content) {
+          apiBlocks = articleBodyBlocks(parseHTML('<div>' + content + '</div>', WEBSITE_BASE));
+        }
+        var seenImages = {};
+        apiBlocks.forEach(function (block) {
+          if (block.kind === 'image' && block.url) seenImages[block.url] = true;
+        });
+        (apiPayload.images || []).forEach(function (image, index) {
+          var imageURL = libraryMedia(image && image.image);
+          if (!imageURL || seenImages[imageURL]) return;
+          seenImages[imageURL] = true;
+          apiBlocks.push({
+            id: 'library-image-' + String((image && image.page) || index),
+            kind: 'image',
+            text: null,
+            url: imageURL
+          });
+        });
+        apiResult.id = 'library:' + id;
+        apiResult.url = '/library/item/' + id;
+        apiResult.title = String(apiPayload.name || manga.title || id).replace(/\s+/g, ' ').trim();
+        apiResult.articleBlocks = apiBlocks;
+        var apiDescription = stripHTML(content).replace(/\s+/g, ' ').trim();
+        apiResult.description = apiDescription ? apiDescription.slice(0, 500) : manga.description;
+        apiResult.info = apiResult.info || {};
+        apiResult.info.contentKind = 'library';
+        apiResult.info.workID = id;
+        apiResult.info.contentCount = String(apiBlocks.filter(function (block) { return block.kind === 'image'; }).length);
+        if (apiPayload.adddt) apiResult.info.listedAt = String(apiPayload.adddt);
+        else if (apiPayload.addtime) apiResult.info.listedAt = String(apiPayload.addtime);
+        apiResult.relatedArticles = [];
+        return apiResult;
+      }
+    } catch (_) {}
+
     var doc = websiteDocument('/library/item/' + id);
     var article = doc.selectFirst('article.library-works') || doc.selectFirst('article');
     if (!article) throw new Error('官网没有返回书库作品正文');
@@ -959,6 +1145,8 @@
   }
 
   var commentPagingCache = {};
+  var COMMENT_PAGE_SIZE = 30;
+  var COMMENT_FETCH_BATCH_SIZE = 8;
 
   function numericCommentTotal(manga) {
     var raw = manga && manga.info ? manga.info.comments : null;
@@ -984,9 +1172,9 @@
 
   function fillCommentPending(state) {
     var guard = 0;
-    while (state.pending.length < 40 && guard++ < 30) {
+    while (state.pending.length < COMMENT_PAGE_SIZE && guard++ < 30) {
       if (state.remainingPaths.length) {
-        var paths = state.remainingPaths.splice(0, 4);
+        var paths = state.remainingPaths.splice(0, COMMENT_FETCH_BATCH_SIZE);
         apiGetBatch(paths).forEach(function (data) {
           if (data && Array.isArray(data.list)) appendCommentList(state, data.list);
         });
@@ -1002,7 +1190,10 @@
         continue;
       }
       if (state.chapterIndex < state.chapterIDs.length) {
-        var chapterBatch = state.chapterIDs.slice(state.chapterIndex, state.chapterIndex + 4);
+        var chapterBatch = state.chapterIDs.slice(
+          state.chapterIndex,
+          state.chapterIndex + COMMENT_FETCH_BATCH_SIZE
+        );
         state.chapterIndex += chapterBatch.length;
         var firstPaths = chapterBatch.map(function (chapterID) {
           return '/forum?aid=' + encodeURIComponent(chapterID) + '&mode=manhua&page=1';
@@ -1038,7 +1229,7 @@
       };
       appendCommentList(state, root.list || []);
       scheduleForumRemainder(state, id, root);
-      var firstComments = state.pending.splice(0, 40);
+      var firstComments = state.pending.splice(0, COMMENT_PAGE_SIZE);
       state.pages[1] = {
         comments: firstComments,
         hasNextPage: state.pending.length > 0 || state.remainingPaths.length > 0 || !state.contextLoaded,
@@ -1053,7 +1244,7 @@
     while (highest < page) {
       fillCommentPending(state);
       highest += 1;
-      var comments = state.pending.splice(0, 40);
+      var comments = state.pending.splice(0, COMMENT_PAGE_SIZE);
       state.pages[highest] = {
         comments: comments,
         hasNextPage: state.pending.length > 0
@@ -1542,8 +1733,8 @@
       var korean = findPromote(promote, '999') || { content: [] };
       var c108 = findPromote(promote, '29') || { content: [] };
       var uncensored = findPromote(promote, '30') || { content: [] };
-      var library = findPromote(promote, '1001') || { content: [] };
       var novels = findPromote(promote, '1002') || { content: [] };
+      var libraryPage = creatorWorkPage(1);
       var single = categoryPage(1, 'single', 'mr', 'a').items.slice(0, 10);
       var latest = paged(apiGet('/latest?page=1') || [], 1, null, 80).items.slice(0, 10);
       var week = apiGet('/week') || {};
@@ -1584,10 +1775,10 @@
         sections.push({ id: sectionID, title: channel.title, items: items });
         sectionStates['hotCategory.' + sectionID] = { state: state, message: message };
       });
-      if ((library.content || []).length) {
+      if (libraryPage.items.length) {
         sections.push({
           id: 'library', title: '禁漫书库',
-          items: (library.content || []).slice(0, 10).map(function (item) { return mapEditorial(item, 'library'); })
+          items: libraryPage.items.slice(0, 10)
         });
       }
       if ((novels.content || []).length) {

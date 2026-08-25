@@ -38,6 +38,7 @@ globalThis.sleep = (milliseconds) => {
 };
 
 globalThis.parseHTML = (html) => ({
+  html() { return String(html); },
   text() {
     return String(html)
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -148,12 +149,19 @@ if (weeklySection) {
 }
 
 const editorialSections = home.hotCategories.filter((section) => section.id.startsWith("community:"));
+assert.equal(editorialSections.length, 3, "homepage did not expose all editorial tabs");
+assert.ok(editorialSections.every((section) => section.items.length >= 1), "an editorial tab is empty");
 for (const section of editorialSections) {
   for (const item of section.items) {
     assert.equal(item.info?.contentKind, "article");
     assert.equal(source.getChapterList(item).length, 0);
   }
 }
+const articleItem = editorialSections[0].items[0];
+const articleDetails = source.getMangaDetails(articleItem);
+assert.equal(articleDetails.info?.contentKind, "article");
+assert.ok(Array.isArray(articleDetails.articleBlocks) && articleDetails.articleBlocks.length >= 1,
+  "article body blocks are missing");
 
 const libraryItem = home.hotCategories.find((section) => section.id === "library")?.items[0];
 assert.ok(libraryItem, "library preview is empty");
@@ -161,8 +169,8 @@ assert.match(libraryItem.coverURL || "", /^https:\/\/cdn-msp[^/]*\.18comic\.vip\
 const libraryDetails = source.getMangaDetails(libraryItem);
 assert.equal(libraryDetails.info?.contentKind, "library");
 assert.equal(source.getChapterList(libraryDetails).length, 0);
-const rawPromote = globalThis.__smokeApiGet("/promote") || [];
-const rawLibraryItem = (rawPromote.find((section) => String(section?.id) === "1001")?.content || [])[0] || {};
+const rawLibraryPayload = globalThis.__smokeApiGet("/creator_work?page=1&search_value=&lang=&source=") || {};
+const rawLibraryItem = (rawLibraryPayload.data?.content || rawLibraryPayload.content || [])[0] || {};
 
 const novelItem = home.hotCategories.find((section) => section.id === "novels")?.items[0];
 assert.ok(novelItem, "novel preview is empty");
@@ -275,10 +283,20 @@ assert.deepEqual(replyCommentFields, {
 });
 const firstCommentPage = source.getCommentsPage(details, 1);
 assert.ok(Array.isArray(firstCommentPage.comments), "first comment page is not an array");
-assert.ok(firstCommentPage.comments.length <= 40, "first comment page is unbounded");
+assert.ok(firstCommentPage.comments.length <= 30, "first comment page is unbounded");
 const comments = firstCommentPage.comments;
 assert.ok(Array.isArray(comments), "comments are not an array");
 assert.ok(comments.every((comment) => typeof comment.isSpoiler === "boolean"), "comments lost spoiler state");
+const secondCommentPage = firstCommentPage.hasNextPage
+  ? source.getCommentsPage(details, 2)
+  : { comments: [], hasNextPage: false };
+assert.ok(Array.isArray(secondCommentPage.comments), "second comment page is not an array");
+assert.ok(secondCommentPage.comments.length <= 30, "second comment page is unbounded");
+assert.equal(
+  new Set([...comments, ...secondCommentPage.comments].map((comment) => comment.id)).size,
+  comments.length + secondCommentPage.comments.length,
+  "incremental comment pages contain duplicate comments"
+);
 const chapters = source.getChapterList(details);
 assert.ok(chapters.length >= 1, `JM${details.id} has no chapters`);
 const pages = source.getPageList(chapters[0]);
@@ -339,6 +357,7 @@ console.log(JSON.stringify({
   },
   firstCommentShape,
   commentCount: comments.length,
+  secondCommentCount: secondCommentPage.comments.length,
   rootCommentCount: comments.filter((comment) => comment.isReply !== true).length,
   searchCount: search.items.length,
   fullListCounts,
