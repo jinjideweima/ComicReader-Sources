@@ -105,7 +105,7 @@ globalThis.requestAll = (requests = []) => {
 
 const instrumentedSourceCode = sourceCode.replace(
   "globalThis.__source = {",
-  "globalThis.__smokeApiGet = apiGet; globalThis.__source = {",
+  "globalThis.__smokeApiGet = apiGet; globalThis.__smokeInteractionCache = interactionCache; globalThis.__source = {",
 );
 vm.runInThisContext(instrumentedSourceCode, { filename: "sources/jmcomic/source.js" });
 const source = globalThis.__source;
@@ -212,8 +212,34 @@ assert.ok(Array.isArray(details.relatedMangas), "related manga are missing");
 assert.ok(Array.isArray(details.recommendations), "random recommendations are missing");
 const interaction = source.getInteractionState(details);
 assert.equal(interaction.isSupported, true);
-assert.equal(interaction.canLike, true);
+assert.equal(interaction.canLike, !interaction.isLiked);
 assert.equal(interaction.canTrack, true);
+
+// JM's official like endpoint is one-way. A caller asking to unlike an
+// already-liked album must not issue a write or report a fake synchronized
+// state.
+globalThis.__smokeInteractionCache[String(details.id)] = {
+  ...interaction,
+  isSupported: true,
+  canLike: false,
+  isLiked: true,
+};
+let unlikeWriteCount = 0;
+const fetchBeforeUnlike = globalThis.fetch;
+try {
+  globalThis.fetch = () => {
+    unlikeWriteCount += 1;
+    throw new Error("unlike must not perform a network write");
+  };
+  const unlike = source.setLiked(details, false);
+  assert.equal(unlike.isSupported, false);
+  assert.equal(unlike.canLike, false);
+  assert.equal(unlike.isLiked, true);
+  assert.match(unlike.message || "", /单向操作/);
+} finally {
+  globalThis.fetch = fetchBeforeUnlike;
+}
+assert.equal(unlikeWriteCount, 0);
 
 const liveFetch = globalThis.fetch;
 const commentRequests = [];

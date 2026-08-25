@@ -5,6 +5,9 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade JMComic to 1.4.1: reflect the website's one-way like behavior instead
+  of exposing a fake unlike toggle, and confirm favorite/like mutations by
+  reading the official album state back before reporting success.
 - Upgrade JMComic to 1.4.0: use the verified website comment endpoint, make
   favorite/like/tracking updates independent and responsive, preserve complete
   work/character/tag/author groups and official random/article links, and

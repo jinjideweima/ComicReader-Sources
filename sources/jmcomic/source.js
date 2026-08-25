@@ -1086,6 +1086,7 @@
   }
 
   var interactionCache = {};
+  var favoriteCache = {};
 
   function isEnabledValue(value) {
     if (value === true || value === 1) return true;
@@ -1100,6 +1101,16 @@
       likeCount: detail.likes === undefined ? null : String(detail.likes),
       isFavorited: isEnabledValue(detail.is_favorite)
     };
+  }
+
+  function confirmAlbumInteraction(id, predicate) {
+    var latest = null;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) sleep(180);
+      latest = albumInteraction(id);
+      if (predicate(latest)) break;
+    }
+    return latest;
   }
 
   function trackingInteraction(id) {
@@ -1144,7 +1155,9 @@
     } catch (_) {}
     var state = {
       isSupported: true,
-      canLike: true,
+      // JM's like endpoint is one-way. Once liked, neither the website nor
+      // the mobile API provides a real unlike operation.
+      canLike: !album.isLiked,
       isLiked: album.isLiked,
       likeCount: album.likeCount,
       canTrack: true,
@@ -1477,8 +1490,9 @@
   }
 
   function favoriteState(manga) {
-    var detail = albumInteraction(albumID(manga.id || manga.url));
-    return {
+    var id = albumID(manga.id || manga.url);
+    var detail = albumInteraction(id);
+    var state = {
       isSupported: true,
       isFavorited: detail.isFavorited,
       category: null,
@@ -1486,11 +1500,13 @@
       note: null,
       message: null
     };
+    favoriteCache[id] = state;
+    return state;
   }
 
   function setFavoriteValue(manga, desired) {
     var id = albumID(manga.id || manga.url);
-    var state = favoriteState(manga);
+    var state = favoriteCache[id] || favoriteState(manga);
     if (state.isFavorited !== desired) {
       var result = apiPost('/favorite', { aid: id });
       if (!hasBusinessStatus(result, ['ok'])) {
@@ -1499,9 +1515,21 @@
           || (desired ? '官网尚未确认收藏，请稍后重试' : '官网尚未确认取消收藏，请稍后重试'));
         return state;
       }
-      state.isFavorited = desired;
+      var verified = confirmAlbumInteraction(id, function (latest) {
+        return latest.isFavorited === desired;
+      });
+      state.isFavorited = !!(verified && verified.isFavorited);
+      if (state.isFavorited !== desired) {
+        state.isSupported = false;
+        state.message = desired
+          ? '官网尚未同步收藏状态，已恢复原状态'
+          : '官网尚未同步取消收藏状态，已恢复原状态';
+        favoriteCache[id] = state;
+        return state;
+      }
     }
     state.message = desired ? '已加入禁漫天堂收藏' : '已从禁漫天堂收藏移除';
+    favoriteCache[id] = state;
     return state;
   }
 
@@ -1913,28 +1941,48 @@
     setLiked: function (manga, desired) {
       var id = albumID(manga.id || manga.url);
       var state = interactionCache[id] || interactionState(manga);
-      var nextLiked = !!desired;
-      if (state.isLiked !== nextLiked) {
+      if (!desired) {
+        state = {
+          isSupported: !state.isLiked,
+          canLike: !state.isLiked,
+          isLiked: state.isLiked,
+          likeCount: state.likeCount,
+          canTrack: true,
+          isTracked: state.isTracked,
+          message: state.isLiked
+            ? '禁漫天堂的喜欢是单向操作，官网暂不支持取消喜欢'
+            : null
+        };
+        interactionCache[id] = state;
+        return state;
+      }
+      if (!state.isLiked) {
         var result = apiPost('/like', { id: id });
         if (!hasBusinessStatus(result, ['success'])) {
           state.isSupported = false;
-          state.message = String((result && (result.msg || result.message))
-            || (desired ? '官网尚未确认点赞，请稍后重试' : '官网尚未确认取消点赞，请稍后重试'));
+          state.message = String((result && (result.msg || result.message)) || '官网尚未确认点赞，请稍后重试');
           return state;
         }
-        state.likeCount = adjustedCount(state.likeCount, nextLiked ? 1 : -1);
+        var verified = confirmAlbumInteraction(id, function (latest) { return latest.isLiked; });
+        if (!verified || !verified.isLiked) {
+          state.isSupported = false;
+          state.message = '官网尚未同步喜欢状态，已恢复原状态';
+          interactionCache[id] = state;
+          return state;
+        }
+        state.likeCount = verified.likeCount || adjustedCount(state.likeCount, 1);
       }
       state = {
         isSupported: true,
-        canLike: true,
-        isLiked: nextLiked,
+        canLike: false,
+        isLiked: true,
         likeCount: state.likeCount,
         canTrack: true,
         isTracked: state.isTracked,
         message: null
       };
       interactionCache[id] = state;
-      state.message = state.isLiked ? '已喜欢这部漫画' : '已取消喜欢';
+      state.message = '已喜欢这部漫画';
       return state;
     },
     setTracking: function (manga, desired) {

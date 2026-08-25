@@ -801,14 +801,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
-      "sha256" : "2e69293f451fa55d880745a94ec9adb46f25fda06e5f20f20f98e4912a61cabf",
+      "sha256" : "5bd4daa550b25ac35ff068d98191eff0111ec2c650bfe6e40b4baf293644c471",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "whwzFM1xwFAun1fccwY9YIxHU+uJ3qauuZeKz8TFAuf32L+rqX7tJnWSDXv9HAcuUaAYhbdtRJpTwFxL378kAQ=="
+        "value" : "IxXhoUVTVVFzwQv4z3RIG87g0HXalTqmmdpehwbYkjOW6IxnY4/xmmUEEDBBxDmJhlUbdyZUhoyb0HQErwcvCQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.4.0"
+      "version" : "1.4.1"
     }
   ]
 }
