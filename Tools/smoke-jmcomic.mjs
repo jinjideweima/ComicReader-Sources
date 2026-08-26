@@ -11,6 +11,7 @@ import vm from "node:vm";
 const repositoryRoot = new URL("../", import.meta.url);
 const sourceCode = fs.readFileSync(new URL("sources/jmcomic/source.js", repositoryRoot), "utf8");
 const values = new Map();
+const requestedURLs = [];
 
 Object.defineProperty(globalThis, "crypto", { configurable: true, value: {
   md5(value) {
@@ -50,6 +51,7 @@ globalThis.parseHTML = (html) => ({
 });
 
 globalThis.fetch = (url, options = {}) => {
+  requestedURLs.push(String(url));
   const marker = "\n__COMICREADER_HTTP_STATUS__";
   const args = ["--silent", "--show-error", "--location", "--compressed", "--max-time", String(options.timeout || 15)];
   for (const [name, value] of Object.entries(options.headers || {})) {
@@ -76,6 +78,7 @@ globalThis.fetch = (url, options = {}) => {
 // underlying GET transfers concurrently. JMComic batch calls share headers.
 globalThis.requestAll = (requests = []) => {
   if (!requests.length) return [];
+  requestedURLs.push(...requests.map((request) => String(request.url)));
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "jmcomic-smoke-batch-"));
   try {
     const args = [
@@ -112,7 +115,15 @@ vm.runInThisContext(instrumentedSourceCode, { filename: "sources/jmcomic/source.
 const source = globalThis.__source;
 assert.ok(source, "source.js did not register globalThis.__source");
 
-const home = source.getHome();
+const timings = {};
+function timed(label, operation) {
+  const started = performance.now();
+  const result = operation();
+  timings[label] = Math.round(performance.now() - started);
+  return result;
+}
+
+const home = timed("homeMs", () => source.getHome());
 assert.ok(home.heroes.length >= 1, "homepage has no serialisation heroes");
 const sectionIDs = new Set(home.hotCategories.map((section) => section.id));
 for (const required of [
@@ -162,6 +173,17 @@ const articleDetails = source.getMangaDetails(articleItem);
 assert.equal(articleDetails.info?.contentKind, "article");
 assert.ok(Array.isArray(articleDetails.articleBlocks) && articleDetails.articleBlocks.length >= 1,
   "article body blocks are missing");
+assert.ok(articleDetails.articleBlocks.some((block) => block.kind === "image" && /^https:\/\//.test(block.url || "")),
+  "article body images are missing");
+const rawArticlePayload = globalThis.__smokeApiGet(`/blog?id=${String(articleItem.id).replace(/\D/g, "")}`) || {};
+const raidersItem = editorialSections.find((section) => section.id === "community:raiders")?.items[0];
+assert.ok(raidersItem, "game-library preview is empty");
+const raidersDetails = source.getMangaDetails(raidersItem);
+const raidersExternalLinks = (raidersDetails.articleBlocks || []).filter((block) =>
+  block.kind === "link" && /^https?:\/\//i.test(block.url || "")
+    && !/https?:\/\/([^.]+\.)?18comic\.vip(?:\/|$)/i.test(block.url || "")
+);
+assert.ok(raidersExternalLinks.length >= 1, "game-library external launch links are missing");
 
 const libraryItem = home.hotCategories.find((section) => section.id === "library")?.items[0];
 assert.ok(libraryItem, "library preview is empty");
@@ -169,8 +191,11 @@ assert.match(libraryItem.coverURL || "", /^https:\/\/cdn-msp[^/]*\.18comic\.vip\
 const libraryDetails = source.getMangaDetails(libraryItem);
 assert.equal(libraryDetails.info?.contentKind, "library");
 assert.equal(source.getChapterList(libraryDetails).length, 0);
+assert.ok((libraryDetails.articleBlocks || []).some((block) => block.kind === "image" && /^https:\/\//.test(block.url || "")),
+  "library body images are missing");
 const rawLibraryPayload = globalThis.__smokeApiGet("/creator_work?page=1&search_value=&lang=&source=") || {};
 const rawLibraryItem = (rawLibraryPayload.data?.content || rawLibraryPayload.content || [])[0] || {};
+const rawLibraryDetail = globalThis.__smokeApiGet(`/creator_work_info_detail?id=${rawLibraryItem.id}`) || {};
 
 const novelItem = home.hotCategories.find((section) => section.id === "novels")?.items[0];
 assert.ok(novelItem, "novel preview is empty");
@@ -180,12 +205,21 @@ assert.match(novelDetails.info?.readingNote || "", /文字内容/);
 assert.equal(source.getChapterList(novelDetails).length, 0);
 
 const first = home.heroes[0].manga;
-const details = source.getMangaDetails(first);
+const detailRequestOffset = requestedURLs.length;
+const details = timed("detailMs", () => source.getMangaDetails(first));
+const detailRequests = requestedURLs.slice(detailRequestOffset);
+assert.deepEqual(
+  [...new Set(detailRequests.map((url) => url.match(/\/album\?id=([^&]+)/)?.[1]).filter(Boolean))],
+  [String(first.id)],
+  "comic detail fetched albums outside the current work",
+);
+assert.equal(detailRequests.filter((url) => /random_recommend|\/album\/\d+/.test(url)).length, 0,
+  "optional recommendations blocked the core detail path");
 const rawAlbum = globalThis.__smokeApiGet(`/album?id=${details.id}`) || {};
 if (Array.isArray(rawAlbum.series) && rawAlbum.series.length > 1) {
-  assert.equal(details.info?.metricScope, "全系列官网聚合");
-  assert.ok(Number(details.info?.views || 0) >= Number(rawAlbum.total_views || 0));
-  assert.ok(Number(details.info?.comments || 0) >= Number(rawAlbum.comment_total || 0));
+  assert.equal(details.info?.metricScope, "当前作品");
+  assert.equal(Number(details.info?.views || 0), Number(rawAlbum.total_views || 0));
+  assert.equal(Number(details.info?.comments || 0), Number(rawAlbum.comment_total || 0));
 }
 const commentModes = {};
 let firstCommentShape = null;
@@ -297,9 +331,15 @@ assert.equal(
   comments.length + secondCommentPage.comments.length,
   "incremental comment pages contain duplicate comments"
 );
-const chapters = source.getChapterList(details);
+const chapterRequestOffset = requestedURLs.length;
+const chapters = timed("chapterListMs", () => source.getChapterList(details));
+assert.equal(requestedURLs.slice(chapterRequestOffset).filter((url) => /\/album\?id=/.test(url)).length, 0,
+  "chapter list repeated the album detail request");
 assert.ok(chapters.length >= 1, `JM${details.id} has no chapters`);
-const pages = source.getPageList(chapters[0]);
+const pageRequestOffset = requestedURLs.length;
+const pages = timed("pageListMs", () => source.getPageList(chapters[0]));
+assert.equal(requestedURLs.slice(pageRequestOffset).filter((url) => /chapter_view_template/.test(url)).length, 0,
+  "reader waited for the redundant chapter HTML template");
 const rawFirstChapter = globalThis.__smokeApiGet(`/chapter?id=${chapters[0].id}`) || {};
 const rawLastChapterAlbum = globalThis.__smokeApiGet(`/album?id=${chapters.at(-1).id}`) || {};
 const lastChapterComments = globalThis.__smokeApiGet(`/forum?aid=${chapters.at(-1).id}&mode=manhua&page=1`) || {};
@@ -311,6 +351,7 @@ const search = source.search(1, details.title, []);
 assert.ok(Array.isArray(search.items));
 
 console.log(JSON.stringify({
+  timings,
   heroCount: home.heroes.length,
   sectionCount: home.hotCategories.length,
   testedAlbum: `JM${details.id}`,
@@ -362,9 +403,17 @@ console.log(JSON.stringify({
   searchCount: search.items.length,
   fullListCounts,
   communityCount: editorialSections.reduce((count, section) => count + section.items.length, 0),
+  gameLibraryExternalLinkCount: raidersExternalLinks.length,
+  gameLibraryAuthorAvatar: raidersDetails.info?.authorAvatarURL || null,
+  rawArticleInfo: Object.fromEntries(Object.entries(rawArticlePayload.info || {}).filter(([key]) =>
+    key !== "content" && !/token|secret|password/i.test(key)
+  )),
   libraryKind: libraryDetails.info.contentKind,
   rawLibraryItem: Object.fromEntries(Object.entries(rawLibraryItem).filter(([key]) =>
     !/token|secret|password/i.test(key)
+  )),
+  rawLibraryDetail: Object.fromEntries(Object.entries(rawLibraryDetail.data || rawLibraryDetail).filter(([key]) =>
+    key !== "content" && key !== "images" && !/token|secret|password/i.test(key)
   )),
   novelKind: novelDetails.info.contentKind,
 }, null, 2));

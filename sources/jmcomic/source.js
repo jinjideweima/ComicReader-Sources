@@ -23,6 +23,10 @@
   var runtimeAppVersion = null;
   var settingLoaded = false;
   var websiteHTMLCache = {};
+  // A detail screen asks for the album and its chapter list separately. Keep
+  // successful GET payloads for this source runtime so the same album is not
+  // downloaded and decrypted twice while opening one screen.
+  var apiGETCache = {};
 
   function unique(values) {
     var seen = {};
@@ -54,9 +58,28 @@
 
   function refreshDomains() {
     var key = crypto.md5(DOMAIN_SERVER_SECRET);
+    if (typeof requestAll === 'function') {
+      var responses = requestAll(DOMAIN_SERVERS.map(function (url) {
+        return { url: url, method: 'GET', timeout: 4, cachePolicy: 'reloadIgnoringLocalCacheData' };
+      })) || [];
+      for (var responseIndex = 0; responseIndex < responses.length; responseIndex++) {
+        try {
+          var candidate = responses[responseIndex];
+          if (!candidate || candidate.error || Number(candidate.status) < 200 || Number(candidate.status) >= 300) continue;
+          var concurrentDecoded = crypto.aes256ECBDecryptBase64(String(candidate.body || '').trim(), key);
+          var concurrentPayload = JSON.parse(concurrentDecoded);
+          var concurrentDomains = unique((concurrentPayload.Setting || []).concat(concurrentPayload.Server || []));
+          if (concurrentDomains.length) {
+            storage.set('api_domains', JSON.stringify(concurrentDomains));
+            return concurrentDomains;
+          }
+        } catch (_) {}
+      }
+      return [];
+    }
     for (var i = 0; i < DOMAIN_SERVERS.length; i++) {
       try {
-        var response = fetch(DOMAIN_SERVERS[i], { timeout: 8, cachePolicy: 'reloadIgnoringLocalCacheData' });
+        var response = fetch(DOMAIN_SERVERS[i], { timeout: 4, cachePolicy: 'reloadIgnoringLocalCacheData' });
         if (response.status < 200 || response.status >= 300 || !String(response.body || '').trim()) continue;
         var decoded = crypto.aes256ECBDecryptBase64(String(response.body).trim(), key);
         var payload = JSON.parse(decoded);
@@ -97,7 +120,7 @@
       'token': crypto.md5(ts + tokenSecret),
       'tokenparam': ts + ',' + (tokenVersion || '')
     };
-    var options = { method: method, headers: headers, timeout: 12 };
+    var options = { method: method, headers: headers, timeout: 6 };
     if (method === 'POST') {
       headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=utf-8';
       options.body = encodeForm(fields || {});
@@ -120,6 +143,45 @@
     method = method || 'GET';
     var domains = prioritizeDomain(savedDomains(), storage.get('active_api_domain'));
     var lastError = null;
+    var activeDomain = storage.get('active_api_domain');
+
+    // On a cold start (or after the remembered host dies), probing old JM API
+    // mirrors one-by-one turns a six-second timeout into a minute. The native
+    // bridge can probe them concurrently and still returns results in the
+    // preferred order. Once a winner is remembered, the normal path remains a
+    // single request to that host.
+    function concurrentGET(list) {
+      if (method !== 'GET' || typeof requestAll !== 'function' || !list.length) return null;
+      var ts = timestamp();
+      var secret = tokenSecret || API_TOKEN_SECRET;
+      var version = tokenVersion === undefined ? '' : tokenVersion;
+      var headers = {
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Encoding': 'gzip, deflate',
+        'User-Agent': API_UA,
+        'token': crypto.md5(ts + secret),
+        'tokenparam': ts + ',' + version
+      };
+      var responses = requestAll(list.map(function (host) {
+        return { url: 'https://' + host + path, method: 'GET', headers: headers, timeout: 6 };
+      })) || [];
+      for (var responseIndex = 0; responseIndex < responses.length; responseIndex++) {
+        try {
+          var response = responses[responseIndex];
+          if (!response || response.error || Number(response.status) < 200 || Number(response.status) >= 300) continue;
+          var outer = JSON.parse(response.body || '{}');
+          if (Number(outer.code) !== 200) continue;
+          var payload = decodedPayload(outer, ts);
+          if (payload && payload.error) continue;
+          storage.set('active_api_domain', list[responseIndex]);
+          return { data: payload, host: list[responseIndex], response: response };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      return null;
+    }
+
     function attempt(list) {
       for (var i = 0; i < list.length; i++) {
         try {
@@ -134,10 +196,25 @@
       }
       return null;
     }
-    var result = attempt(domains);
+    var result = null;
+    if (method === 'GET' && typeof requestAll === 'function') {
+      if (activeDomain && domains[0] === activeDomain) {
+        result = attempt([activeDomain]);
+        if (!result) result = concurrentGET(domains.slice(1));
+      } else {
+        result = concurrentGET(domains);
+      }
+    } else {
+      result = attempt(domains);
+    }
     if (!result) {
       var refreshed = refreshDomains();
-      if (refreshed.length) result = attempt(unique(refreshed.concat(domains)));
+      if (refreshed.length) {
+        var refreshedCandidates = unique(refreshed.concat(domains));
+        result = method === 'GET' && typeof requestAll === 'function'
+          ? concurrentGET(refreshedCandidates)
+          : attempt(refreshedCandidates);
+      }
     }
     if (!result) {
       throw new Error('禁漫天堂移动 API 当前不可用：' + String(lastError && lastError.message ? lastError.message : lastError));
@@ -146,7 +223,11 @@
   }
 
   function apiGet(path) {
-    return apiRequest(path, 'GET', null, API_TOKEN_SECRET, '').data;
+    var cacheable = /^\/(?:album|chapter)\?id=/.test(path) || path === '/setting';
+    if (cacheable && Object.prototype.hasOwnProperty.call(apiGETCache, path)) return apiGETCache[path];
+    var data = apiRequest(path, 'GET', null, API_TOKEN_SECRET, '').data;
+    if (cacheable) apiGETCache[path] = data;
+    return data;
   }
 
   // The native bridge executes these signed requests concurrently. This keeps
@@ -258,8 +339,14 @@
   function ensureSetting() {
     if (settingLoaded) return;
     settingLoaded = true;
-    runtimeImageHost = allowedDynamicImageHost(storage.get('image_host')) || FALLBACK_IMAGE_HOST;
+    var savedImageHost = allowedDynamicImageHost(storage.get('image_host'));
+    runtimeImageHost = savedImageHost || FALLBACK_IMAGE_HOST;
     runtimeAppVersion = storage.get('app_version') || DEFAULT_APP_VERSION;
+    // Existing installations already have the most recently working image
+    // host. Do not put another API request in front of every cover and reader
+    // image during normal navigation. A fresh install still performs the
+    // setting lookup once so it can discover the current CDN.
+    if (savedImageHost) return;
     try {
       var setting = apiGet('/setting') || {};
       var imageHost = allowedDynamicImageHost(setting.img_host);
@@ -300,7 +387,14 @@
     return WEBSITE_BASE + (value.charAt(0) === '/' ? value : '/' + value);
   }
 
-  function websiteGet(path) {
+  function articleLinkURL(path) {
+    var value = String(path || '').trim();
+    if (!value || /^javascript:/i.test(value) || /^data:/i.test(value)) return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    return websiteURL(value);
+  }
+
+  function websiteGet(path, timeoutSeconds) {
     var url = websiteURL(path);
     if (!url) throw new Error('禁漫天堂网页地址不受信任');
     if (websiteHTMLCache[url]) return websiteHTMLCache[url];
@@ -311,7 +405,7 @@
         'Referer': WEBSITE_BASE + '/',
         'User-Agent': API_UA
       },
-      timeout: 15
+      timeout: Math.max(2, Number(timeoutSeconds || 15))
     });
     if (response.status < 200 || response.status >= 300 || !String(response.body || '').trim()) {
       throw new Error('禁漫天堂网页内容暂时不可用（HTTP ' + response.status + '）');
@@ -351,9 +445,9 @@
     }
   }
 
-  function websiteDocument(path) {
+  function websiteDocument(path, timeoutSeconds) {
     var url = websiteURL(path);
-    return parseHTML(websiteGet(path), url || WEBSITE_BASE);
+    return parseHTML(websiteGet(path, timeoutSeconds), url || WEBSITE_BASE);
   }
 
   function webImageURL(element) {
@@ -363,6 +457,25 @@
     if (value.indexOf('//') === 0) value = 'https:' + value;
     var resolved = websiteURL(value);
     return resolved || null;
+  }
+
+  // Article bodies are allowed to embed images from JM's rotating CDN as well
+  // as an author's own platform (for example Fanbox).  websiteURL deliberately
+  // rejects those hosts, so using it for body images made the native article
+  // reader silently discard every non-18comic image.
+  function contentImageURL(element) {
+    if (!element) return null;
+    var value = String(element.attr('data-src') || element.attr('data-original')
+      || element.attr('abs:src') || element.attr('src') || '').trim();
+    if (!value || value === '/' || /^data:/i.test(value) || /^javascript:/i.test(value)) return null;
+    if (value.indexOf('//') === 0) value = 'https:' + value;
+    if (/^https?:\/\//i.test(value)) {
+      var absolute = value.replace(/^http:/i, 'https:');
+      var absoluteMatch = absolute.match(/^https:\/\/[^/]+(\/[^?#]*)?(?:[?#].*)?$/i);
+      if (!absoluteMatch || !absoluteMatch[1] || absoluteMatch[1] === '/') return null;
+      return absolute;
+    }
+    return absoluteMedia(value);
   }
 
   function libraryMedia(path) {
@@ -504,17 +617,14 @@
     var series = Array.isArray(item.series) ? item.series : [];
     result.info.contentCount = String(Math.max(series.length, 1));
     result.info.uploader = item.uploader || item.username || '未公开';
-    var aggregate = aggregateSeriesMetrics(item);
-    if (aggregate) {
-      result.info.listedAt = dateText(aggregate.listedAt) || '';
-      result.info.updatedAt = dateText(aggregate.updatedAt) || result.info.listedAt;
-      result.info.views = String(aggregate.views);
-      result.info.comments = String(aggregate.comments);
-      result.info.metricScope = '全系列官网聚合';
-    } else {
-      result.info.listedAt = dateText(item.addtime) || originalInfo.listedAt || originalInfo.posted || '';
-      result.info.updatedAt = dateText(item.update_at) || originalInfo.updatedAt || originalInfo.updated || result.info.listedAt;
-    }
+    // The album endpoint already supplies the values shown by the official
+    // detail page. The old implementation requested every item in `series`
+    // before returning merely to calculate aggregate counters. A 116-chapter
+    // album therefore generated 116 extra requests and blocked the UI for
+    // about a minute. Keep the detail path to this single album response.
+    result.info.listedAt = dateText(item.addtime) || originalInfo.listedAt || originalInfo.posted || '';
+    result.info.updatedAt = dateText(item.update_at) || originalInfo.updatedAt || originalInfo.updated || result.info.listedAt;
+    result.info.metricScope = '当前作品';
     result.info.isLiked = item.liked === true || String(item.liked) === '1' ? 'true' : 'false';
     result.info.isFavorited = item.is_favorite === true || String(item.is_favorite) === '1' ? 'true' : 'false';
     result.info.shortVideoURL = 'https://18comic.vip/media/JmShortVideo/' + result.id + '.mp4';
@@ -529,39 +639,11 @@
     result.tags = groups.reduce(function (all, group) { return all.concat(group.values); }, []);
     result.relatedMangas = mapAlbums(item.related_list || [], 18);
 
-    try {
-      var random = apiGet('/random_recommend') || [];
-      var randomItems = Array.isArray(random) ? random : (random.list || random.content || random.data || []);
-      result.recommendations = mapAlbums(randomItems, 12).filter(function (manga) { return manga.id !== result.id; });
-    } catch (_) {
-      result.recommendations = [];
-    }
-    try {
-      var albumDocument = websiteDocument('/album/' + result.id);
-      result.relatedArticles = parseEditorialCards(albumDocument.selectFirst('#related_comics'), 'dinner', 12);
-      var officialRandomID = null;
-      albumDocument.select('a[href*="/album/"]').forEach(function (anchor) {
-        if (officialRandomID) return;
-        var text = String(anchor.text() || '').replace(/\s+/g, '').trim();
-        if (text.indexOf('隨便看看') < 0 && text.indexOf('随便看看') < 0) return;
-        var match = String(anchor.attr('href') || anchor.attr('abs:href') || '').match(/\/album\/(\d+)/);
-        if (match && match[1] !== result.id) officialRandomID = match[1];
-      });
-      if (officialRandomID) {
-        var matchedIndex = -1;
-        result.recommendations.forEach(function (manga, index) {
-          if (String(manga.id) === officialRandomID) matchedIndex = index;
-        });
-        var officialRandom = matchedIndex >= 0
-          ? result.recommendations.splice(matchedIndex, 1)[0]
-          : mapAlbum({ id: officialRandomID, name: '随机推荐' }, false);
-        result.recommendations.unshift(officialRandom);
-      }
-    } catch (_) {
-      // A failed website request must never be replaced by unrelated library
-      // works. The mobile API does not expose this relationship.
-      result.relatedArticles = [];
-    }
+    // Recommendations already arrive with the album payload. Optional website
+    // scraping and a second random-recommend API used to block the entire
+    // detail screen when either host was slow; render the available data now.
+    result.recommendations = result.relatedMangas.slice(0, 12);
+    result.relatedArticles = [];
     return result;
   }
 
@@ -579,13 +661,15 @@
 
   function mapEditorial(item, kind) {
     var id = String(item.id || '');
-    var path = kind === 'novel' ? '/novel/' + id : '/library/item/' + id;
+    var authorID = String(item.author_id || '');
+    var path = kind === 'novel' ? '/novel/' + id
+      : (authorID ? '/library/' + authorID + '/' + id : '/library/item/' + id);
     var info = { contentKind: kind };
     if (item.likes !== undefined) info.likes = String(item.likes);
     if (item.update_at) info.updatedAt = String(item.update_at);
     if (item.work_date) info.updatedAt = String(item.work_date);
     if (item.platform_name) info.platform = String(item.platform_name);
-    if (item.author_id) info.authorID = String(item.author_id);
+    if (authorID) info.authorID = authorID;
     return {
       id: kind + ':' + id,
       url: path,
@@ -594,7 +678,7 @@
         ? libraryMedia(item.work_image || item.image || item.pic_s || item.cover || '')
         : absoluteMedia(item.image || item.pic_s || ''),
       author: firstText(item.author_name || item.author),
-      genres: [kind === 'novel' ? '小说' : '创作者书库'],
+      genres: [kind === 'novel' ? '小说' : '禁漫书库'],
       status: 'unknown',
       info: info
     };
@@ -634,6 +718,9 @@
     if (item.total_views !== undefined) info.views = String(item.total_views);
     if (item.total_comments !== undefined) info.comments = String(item.total_comments);
     if (item.total_likes !== undefined) info.likes = String(item.total_likes);
+    var authorAvatarURL = absoluteUserPhoto(item.photo || item.avatar || item.user_photo);
+    if (authorAvatarURL) info.authorAvatarURL = authorAvatarURL;
+    if (item.username) info.authorProfileURL = WEBSITE_BASE + '/user/' + encodeURIComponent(String(item.username)) + '/blog';
     return {
       id: 'article:' + id,
       url: '/blog/' + id,
@@ -786,24 +873,81 @@
       if (!cleanText && !url) return;
       blocks.push({ id: 'block-' + index++, kind: kind, text: cleanText || null, url: url || null });
     }
+    function pushText(fragment, kind) {
+      var text = stripHTML(fragment).replace(/\s+/g, ' ').trim();
+      if (text) push(kind || 'paragraph', text, null);
+    }
     while ((match = pattern.exec(html)) !== null && blocks.length < 300) {
       var fragment = String(match[0] || '');
-      var doc = parseHTML('<div>' + fragment + '</div>', WEBSITE_BASE);
-      var isHeading = /^<h[1-6]\b/i.test(fragment);
-      var text = doc.text().replace(/\s+/g, ' ').trim();
-      var images = typeof doc.select === 'function' ? doc.select('img') : [];
-      if (text) push(isHeading ? 'heading' : 'paragraph', text, null);
-      images.forEach(function (image) {
-        var imageURL = webImageURL(image);
-        if (imageURL) push('image', image.attr('alt') || null, imageURL);
-      });
-      if (typeof doc.select === 'function') {
-        doc.select('a[href]').forEach(function (anchor) {
-          var href = anchor.attr('abs:href') || anchor.attr('href') || '';
-          if (!/\/album\/\d+/i.test(String(href))) return;
-          push('link', anchor.text().trim() || '打开推荐漫画', websiteURL(href));
-        });
+      if (/^<h[1-6]\b/i.test(fragment)) {
+        pushText(fragment, 'heading');
+        continue;
       }
+
+      // Keep paragraphs, inline images and explicit links in their source
+      // order. JM game-library posts commonly place a launch link before and
+      // after the article; flattening the whole <p> first used to lose those
+      // actions and move images away from the surrounding prose.
+      var inlinePattern = /<a\b[^>]*>[\s\S]*?<\/a>|<img\b[^>]*>/gi;
+      var inlineMatch;
+      var cursor = 0;
+      while ((inlineMatch = inlinePattern.exec(fragment)) !== null && blocks.length < 300) {
+        pushText(fragment.slice(cursor, inlineMatch.index), 'paragraph');
+        var token = String(inlineMatch[0] || '');
+        var tokenDoc = parseHTML('<div>' + token + '</div>', WEBSITE_BASE);
+        if (/^<a\b/i.test(token)) {
+          var anchor = tokenDoc.selectFirst ? tokenDoc.selectFirst('a[href]') : null;
+          if (anchor) {
+            var image = anchor.selectFirst('img');
+            if (image) {
+              var linkedImageURL = contentImageURL(image);
+              if (linkedImageURL) push('image', image.attr('alt') || null, linkedImageURL);
+            }
+            var href = anchor.attr('abs:href') || anchor.attr('href') || '';
+            var linkText = anchor.text().replace(/\s+/g, ' ').trim();
+            var resolvedLink = articleLinkURL(href);
+            if (resolvedLink && linkText) push('link', linkText, resolvedLink);
+          } else {
+            // The command-line smoke harness intentionally exposes only a
+            // minimal HTML bridge. Keep a conservative attribute fallback so
+            // the parser and its external-link policy are still testable.
+            var rawHrefMatch = token.match(/\bhref\s*=\s*["']([^"']+)["']/i);
+            var rawImageMatch = token.match(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
+            if (rawImageMatch) {
+              var rawImageValue = String(rawImageMatch[1] || '').trim();
+              if (/^https?:\/\//i.test(rawImageValue)) {
+                if (!/^https?:\/\/[^/]+\/?(?:[?#].*)?$/i.test(rawImageValue)) {
+                  push('image', null, rawImageValue.replace(/^http:/i, 'https:'));
+                }
+              } else if (rawImageValue && rawImageValue !== '/') {
+                push('image', null, absoluteMedia(rawImageValue));
+              }
+            }
+            var rawLinkText = stripHTML(token).replace(/\s+/g, ' ').trim();
+            var rawResolvedLink = articleLinkURL(rawHrefMatch && rawHrefMatch[1]);
+            if (rawResolvedLink && rawLinkText) push('link', rawLinkText, rawResolvedLink);
+          }
+        } else {
+          var standaloneImage = tokenDoc.selectFirst ? tokenDoc.selectFirst('img') : null;
+          var imageURL = contentImageURL(standaloneImage);
+          if (!imageURL) {
+            var standaloneImageMatch = token.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+            if (standaloneImageMatch) {
+              var standaloneValue = String(standaloneImageMatch[1] || '').trim();
+              if (/^https?:\/\//i.test(standaloneValue)) {
+                if (!/^https?:\/\/[^/]+\/?(?:[?#].*)?$/i.test(standaloneValue)) {
+                  imageURL = standaloneValue.replace(/^http:/i, 'https:');
+                }
+              } else if (standaloneValue && standaloneValue !== '/') {
+                imageURL = absoluteMedia(standaloneValue);
+              }
+            }
+          }
+          if (imageURL) push('image', standaloneImage ? (standaloneImage.attr('alt') || null) : null, imageURL);
+        }
+        cursor = inlinePattern.lastIndex;
+      }
+      pushText(fragment.slice(cursor), 'paragraph');
     }
     return blocks;
   }
@@ -854,10 +998,19 @@
         apiResult.info.blogID = id;
         apiResult.info.editorialChannel = channel;
         apiResult.info.editorialTitle = editorialChannelTitle(channel);
+        var authorAvatarURL = absoluteUserPhoto(apiInfo.photo || apiInfo.avatar || apiInfo.user_photo);
+        if (authorAvatarURL) apiResult.info.authorAvatarURL = authorAvatarURL;
+        if (apiInfo.username) {
+          apiResult.info.authorProfileURL = WEBSITE_BASE + '/user/' + encodeURIComponent(String(apiInfo.username)) + '/blog';
+        }
+        var experience = apiInfo.expInfo || apiInfo.expinfo || {};
+        var authorLevel = apiInfo.level_name || experience.level_name;
+        if (authorLevel) apiResult.info.authorLevel = String(authorLevel);
         if (apiInfo.date) apiResult.info.listedAt = String(apiInfo.date);
         if (apiInfo.total_views !== undefined) apiResult.info.views = String(apiInfo.total_views);
         if (apiInfo.total_comments !== undefined) apiResult.info.comments = String(apiInfo.total_comments);
         if (apiInfo.total_likes !== undefined) apiResult.info.likes = String(apiInfo.total_likes);
+        apiResult.info.isLiked = isEnabledValue(apiInfo.is_liked) ? 'true' : 'false';
         apiResult.relatedMangas = mapAlbums(payload.related_comics || [], 12);
         apiResult.relatedArticles = (payload.related_blogs || []).map(function (item) {
           return mapBlogEditorial(item, channel);
@@ -878,17 +1031,27 @@
       : null;
     var channel = channelMatch ? channelMatch[1] : String((manga.info || {}).editorialChannel || 'dinner');
     var authorAnchor = doc.selectFirst('a[href*="/user/"][href*="/blog"]');
+    var authorImage = (authorAnchor && authorAnchor.selectFirst('img'))
+      || doc.selectFirst('.blog_id_main img.comment-avatar')
+      || doc.selectFirst('img.comment-avatar');
     var headerText = article.text();
     var dateMatch = headerText.match(/上架日期[：:]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/);
-    var commentsAnchor = doc.selectFirst('a[href="#comments"]');
+    var commentsAnchor = doc.selectFirst('.gotoComments') || doc.selectFirst('a[href="#comments"]');
     var commentMatch = commentsAnchor ? commentsAnchor.text().match(/(\d+)/) : null;
+    var likesElement = doc.selectFirst('[id^="total_likes_"]');
+    var likesMatch = likesElement ? likesElement.text().match(/(\d+)/) : null;
     var result = {};
     Object.keys(manga).forEach(function (key) { result[key] = manga[key]; });
     result.id = 'article:' + id;
     result.url = '/blog/' + id;
     result.title = titleElement ? titleElement.text().trim() : manga.title;
     result.author = authorAnchor ? authorAnchor.text().trim() : manga.author;
-    result.genres = [editorialChannelTitle(channel)];
+    var fallbackTags = [];
+    article.select('a[href*="/search/photos?search_query="]').forEach(function (anchor) {
+      var tag = anchor.text().replace(/\s+/g, ' ').trim();
+      if (tag && fallbackTags.indexOf(tag) < 0) fallbackTags.push(tag);
+    });
+    result.genres = [editorialChannelTitle(channel)].concat(fallbackTags);
     result.articleBlocks = blocks;
     result.description = blocks.filter(function (block) { return block.kind === 'paragraph' && block.text; })[0]
       ? blocks.filter(function (block) { return block.kind === 'paragraph' && block.text; })[0].text
@@ -898,8 +1061,21 @@
     result.info.blogID = id;
     result.info.editorialChannel = channel;
     result.info.editorialTitle = editorialChannelTitle(channel);
+    var fallbackAvatarURL = webImageURL(authorImage);
+    if (fallbackAvatarURL) result.info.authorAvatarURL = fallbackAvatarURL;
+    if (authorAnchor) {
+      var authorHref = authorAnchor.attr('abs:href') || authorAnchor.attr('href') || '';
+      var authorProfileURL = websiteURL(authorHref);
+      if (authorProfileURL) result.info.authorProfileURL = authorProfileURL;
+    }
+    var authorLevelElement = doc.selectFirst('.blog_name');
+    if (authorLevelElement) {
+      var authorLevelText = authorLevelElement.text().replace(/\s+/g, ' ').trim();
+      if (authorLevelText && authorLevelText !== result.author) result.info.authorLevel = authorLevelText;
+    }
     if (dateMatch) result.info.listedAt = dateMatch[1];
     if (commentMatch) result.info.comments = commentMatch[1];
+    if (likesMatch) result.info.likes = likesMatch[1];
     var relatedRoot = doc.selectFirst('#related_comics');
     result.relatedArticles = parseEditorialCards(relatedRoot, channel, 12).filter(function (item) {
       return item.id !== result.id;
@@ -910,6 +1086,8 @@
 
   function parseLibraryDetails(manga) {
     var id = String(manga.id || manga.url || '').replace(/^library:/, '').replace(/\D/g, '');
+    var authorID = String((manga.info || {}).authorID || '');
+    var libraryPath = authorID ? '/library/' + authorID + '/' + id : '/library/item/' + id;
     try {
       var apiPayload = apiGet('/creator_work_info_detail?id=' + encodeURIComponent(id)) || {};
       if (apiPayload && apiPayload.data && typeof apiPayload.data === 'object') apiPayload = apiPayload.data;
@@ -937,8 +1115,10 @@
           });
         });
         apiResult.id = 'library:' + id;
-        apiResult.url = '/library/item/' + id;
+        apiResult.url = libraryPath;
         apiResult.title = String(apiPayload.name || manga.title || id).replace(/\s+/g, ' ').trim();
+        apiResult.author = firstText(apiPayload.author_name || apiPayload.author || manga.author);
+        apiResult.genres = ['禁漫书库'];
         apiResult.articleBlocks = apiBlocks;
         var apiDescription = stripHTML(content).replace(/\s+/g, ' ').trim();
         apiResult.description = apiDescription ? apiDescription.slice(0, 500) : manga.description;
@@ -953,25 +1133,40 @@
       }
     } catch (_) {}
 
-    var doc = websiteDocument('/library/item/' + id);
+    var doc = websiteDocument(libraryPath);
     var article = doc.selectFirst('article.library-works') || doc.selectFirst('article');
     if (!article) throw new Error('官网没有返回书库作品正文');
     var titleElement = article.selectFirst('h1') || doc.selectFirst('h1');
-    var authorAnchor = doc.selectFirst('a[href*="/library/"]');
-    var blocks = [];
-    article.select('img').forEach(function (image, index) {
-      var url = webImageURL(image);
-      if (url) blocks.push({ id: 'library-image-' + index, kind: 'image', text: null, url: url });
-    });
+    var authorHeader = doc.selectFirst('.author-header.works') || doc.selectFirst('.author-header');
+    var authorAnchor = (authorHeader && authorHeader.selectFirst('a[href*="/library/"]'))
+      || doc.selectFirst('a[href*="/library/"]');
+    var bodyRoot = article.selectFirst('section') || article;
+    var blocks = articleBodyBlocks(bodyRoot);
     var result = {};
     Object.keys(manga).forEach(function (key) { result[key] = manga[key]; });
     result.id = 'library:' + id;
-    result.url = '/library/item/' + id;
+    result.url = libraryPath;
     result.title = titleElement ? titleElement.text().trim() : manga.title;
     result.author = authorAnchor ? authorAnchor.text().trim() : manga.author;
+    result.genres = ['禁漫书库'];
     result.articleBlocks = blocks;
     result.info = result.info || {};
     result.info.contentKind = 'library';
+    result.info.workID = id;
+    var authorAvatar = authorHeader && authorHeader.selectFirst('img');
+    var authorAvatarURL = contentImageURL(authorAvatar);
+    if (authorAvatarURL) result.info.authorAvatarURL = authorAvatarURL;
+    if (authorAnchor) {
+      var authorProfileURL = websiteURL(authorAnchor.attr('abs:href') || authorAnchor.attr('href') || '');
+      if (authorProfileURL) result.info.authorProfileURL = authorProfileURL;
+    }
+    var platformAnchor = authorHeader && authorHeader.selectFirst('a[href^="http"]');
+    if (platformAnchor) {
+      var platformURL = articleLinkURL(platformAnchor.attr('abs:href') || platformAnchor.attr('href') || '');
+      if (platformURL) result.info.authorPlatformURL = platformURL;
+      var platformName = platformAnchor.text().replace(/\s+/g, ' ').trim();
+      if (platformName) result.info.platform = platformName;
+    }
     var dateMatch = article.text().match(/([0-9]{4}-[0-9]{2}-[0-9]{2}(?:\s+[0-9:]+)?)/);
     if (dateMatch) result.info.listedAt = dateMatch[1];
 
@@ -979,15 +1174,15 @@
     var related = [];
     doc.select('a[href*="/library/"]').forEach(function (anchor) {
       var href = anchor.attr('abs:href') || anchor.attr('href') || '';
-      var match = String(href).match(/\/library\/\d+\/(\d+)(?:[/?#]|$)/);
+      var match = String(href).match(/\/library\/(\d+)\/(\d+)(?:[/?#]|$)/);
       var image = anchor.selectFirst('img');
-      if (!match || !image || seen[match[1]] || match[1] === id) return;
-      var title = String(image.attr('title') || image.attr('alt') || anchor.text() || match[1]).trim();
-      seen[match[1]] = true;
+      if (!match || !image || seen[match[2]] || match[2] === id) return;
+      var title = String(image.attr('title') || image.attr('alt') || anchor.text() || match[2]).trim();
+      seen[match[2]] = true;
       related.push({
-        id: 'library:' + match[1], url: '/library/item/' + match[1], title: title,
-        coverURL: webImageURL(image), author: result.author, genres: ['创作者书库'], status: 'unknown',
-        info: { contentKind: 'library' }
+        id: 'library:' + match[2], url: '/library/' + match[1] + '/' + match[2], title: title,
+        coverURL: contentImageURL(image), author: result.author, genres: ['禁漫书库'], status: 'unknown',
+        info: { contentKind: 'library', authorID: match[1] }
       });
     });
     result.relatedArticles = related.slice(0, 12);
@@ -1294,6 +1489,25 @@
     };
   }
 
+  function articleInteraction(id) {
+    var payload = apiGet('/blog?id=' + encodeURIComponent(id)) || {};
+    var detail = payload.info || {};
+    return {
+      isLiked: isEnabledValue(detail.is_liked),
+      likeCount: detail.total_likes === undefined ? null : String(detail.total_likes)
+    };
+  }
+
+  function confirmArticleInteraction(id, predicate) {
+    var latest = null;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) sleep(180);
+      latest = articleInteraction(id);
+      if (predicate(latest)) break;
+    }
+    return latest;
+  }
+
   function confirmAlbumInteraction(id, predicate) {
     var latest = null;
     for (var attempt = 0; attempt < 2; attempt++) {
@@ -1338,6 +1552,28 @@
   }
 
   function interactionState(manga) {
+    var kind = manga && manga.info ? manga.info.contentKind : 'comic';
+    if (kind === 'article') {
+      var articleID = String(manga.id || manga.url || '').replace(/^article:/, '').replace(/\D/g, '');
+      var article = articleInteraction(articleID);
+      var articleState = {
+        isSupported: true,
+        canLike: !article.isLiked,
+        isLiked: article.isLiked,
+        likeCount: article.likeCount,
+        canTrack: false,
+        isTracked: false,
+        message: null
+      };
+      interactionCache['article:' + articleID] = articleState;
+      return articleState;
+    }
+    if (kind && kind !== 'comic') {
+      return {
+        isSupported: false, canLike: false, isLiked: false, likeCount: null,
+        canTrack: false, isTracked: false, message: null
+      };
+    }
     var id = albumID(manga.id || manga.url);
     var album = albumInteraction(id);
     var tracked = false;
@@ -1916,14 +2152,10 @@
       var id = albumID(chapter.id || chapter.url);
       var data = apiGet('/chapter?id=' + encodeURIComponent(id)) || {};
       var files = data.images || [];
-      var ts = timestamp();
-      var template = signedPlainGet(
-        '/chapter_view_template?id=' + encodeURIComponent(id)
-          + '&mode=vertical&page=0&app_img_shunt=1&express=off&v=' + ts,
-        API_CONTENT_TOKEN_SECRET
-      );
-      var scrambleMatch = template.match(/scramble_id\s*=\s*(\d+)/i);
-      var parsedScrambleID = scrambleMatch ? Number(scrambleMatch[1]) : Number(data.scramble_id || 220980);
+      // Modern chapter responses carry scramble_id. Prefer it and avoid a
+      // second signed HTML request before the reader can display anything.
+      // The official historical threshold remains the safe fallback.
+      var parsedScrambleID = Number(data.scramble_id || 220980);
       return files.map(function (filename, index) {
         var bare = String(filename).replace(/\.[^.]+$/, '');
         var scrambleID = parsedScrambleID;
@@ -2130,6 +2362,33 @@
 
     getInteractionState: function (manga) { return interactionState(manga); },
     setLiked: function (manga, desired) {
+      var kind = manga && manga.info ? manga.info.contentKind : 'comic';
+      if (kind === 'article') {
+        var articleID = String(manga.id || manga.url || '').replace(/^article:/, '').replace(/\D/g, '');
+        var articleKey = 'article:' + articleID;
+        var articleState = interactionCache[articleKey] || interactionState(manga);
+        if (!desired || articleState.isLiked) {
+          articleState.message = articleState.isLiked ? '这篇文章已经喜欢过了' : null;
+          interactionCache[articleKey] = articleState;
+          return articleState;
+        }
+        apiPost('/blog_like', { id: articleID });
+        var verifiedArticle = confirmArticleInteraction(articleID, function (latest) { return latest.isLiked; });
+        if (!verifiedArticle || !verifiedArticle.isLiked) {
+          articleState.isSupported = false;
+          articleState.message = '官网尚未确认文章喜欢状态，请稍后重试';
+          interactionCache[articleKey] = articleState;
+          return articleState;
+        }
+        articleState = {
+          isSupported: true, canLike: false, isLiked: true,
+          likeCount: verifiedArticle.likeCount || adjustedCount(articleState.likeCount, 1),
+          canTrack: false, isTracked: false, message: '已喜欢这篇文章'
+        };
+        interactionCache[articleKey] = articleState;
+        return articleState;
+      }
+      if (kind && kind !== 'comic') return interactionState(manga);
       var id = albumID(manga.id || manga.url);
       var state = interactionCache[id] || interactionState(manga);
       if (!desired) {
@@ -2177,6 +2436,8 @@
       return state;
     },
     setTracking: function (manga, desired) {
+      var kind = manga && manga.info ? manga.info.contentKind : 'comic';
+      if (kind && kind !== 'comic') return interactionState(manga);
       var id = albumID(manga.id || manga.url);
       var state = interactionCache[id] || interactionState(manga);
       if (state.isTracked !== !!desired) apiPost('/album_sertracking', { id: albumID(manga.id || manga.url) });
