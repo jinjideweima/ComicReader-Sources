@@ -487,14 +487,14 @@
         }
       ],
       "scriptURL" : "sources/ehentai/source.js",
-      "sha256" : "8d5d753f569515b6a0fc38b5f5d86fc821195dd1426c4cd1a1eb3674bf9ab465",
+      "sha256" : "df76106012a507a3b8a54c7621a322da721bcd8d9724df69677bd4fdb40516dd",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "ghlHObRmBrAWnCgdzVmad/RmQh/VdMLM9/2zjgbRB6Fy5qsNBH9p/HEQtVbAplTsuxCGnngq2WYyMumzWsgyAA=="
+        "value" : "Lv9kpvV+gH7cClNXFYAsx3BD4MJ+WB1+ZzSlaOadjHquysOwjRkpixFEwhkj0gwn7F3nQm/xgamf26B2blwWAw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
-      "version" : "1.5.2"
+      "version" : "1.5.3"
     },
     {
       "allowedHosts" : [
@@ -802,14 +802,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
-      "sha256" : "87616489ec7d67fce8c7a36bb5d5c7f9445c28427cddee55efc2909d5b2c6763",
+      "sha256" : "7a26951a8c8699b2d1d66755968844bb1aae9a50937facfff7d3d7d3ab7f7117",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "H38fsDJscW75D/M8sM3PYrXav0L9JDs3N9TpQxZhJEKeHBZ5U7jY+Y9cylL9rjeikPTnezqm0jvLgUXfKmDoCg=="
+        "value" : "Y2rxNszvKEwrCcqI/2Miv9mB7pIKyMGjZbLEqTsb5QJjYPXAmMhu7yUSDlfdZ6X2nRRt3XdcSRXUdHdoS8u4BQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.4.5"
+      "version" : "1.4.7"
     }
   ]
 }

@@ -3977,27 +3977,26 @@
       };
     },
 
-    // 列表缩略图只负责首帧。可见卡片随后最多两路并发调用这里，解析画廊第一张
-    // 重采样大图作为高清最终封面；失败时 App 会继续保留列表缩略图，不阻塞文字排版。
+    // E-Hentai 的高清封面曾通过「详情 -> 页表 -> 第一张查看页 -> 图片页」整条链路解析。
+    // JSContext 内的插件调用是串行的；用户从列表点进详情时，这些仍在运行的封面任务会把
+    // 真正的详情请求堵在后面，慢线路上会累积到几十秒。列表和详情页已经提供可用封面，
+    // 因此这里只发布现有 URL，不再为了装饰性升级占用详情/阅读的唯一运行时。
     getHighResolutionCover: function (manga) {
-      var details = this.getMangaDetails(manga);
-      var chapters = this.getChapterList(details);
-      if (!chapters.length) return details;
-      var pages = this.getPageList(chapters[0]);
-      if (!pages.length) return details;
-      var resolved = this.getImageURL(pages[0], false, 'cover');
-      details.highResolutionCoverURL = resolved || details.coverURL || manga.coverURL || null;
-      return details;
+      var copy = {};
+      Object.keys(manga || {}).forEach(function (key) { copy[key] = manga[key]; });
+      copy.highResolutionCoverURL = copy.highResolutionCoverURL || copy.coverURL || null;
+      return copy;
     },
 
     // 只读评论（P3）：复用详情那张画廊页（galleryBody 缓存），解析 #cdiv 里的 .c1 评论块。
     // c3=作者+时间、c6=正文、c5=分值。上传者评论(无分值且居首)打标记置顶。
     // 正文走 .html() → parseCommentSpans 保真排版（换行/链接），body 用切片拼接成纯文本兜底。
     getComments: function (manga) {
-      // Comment ordering changes the server-selected top-50 subset. Always
-      // refresh this document so a newly-saved sort is not masked by the
-      // gallery detail cache.
-      return parseGalleryComments(parseHTML(galleryBody(manga, true), site()));
+      // The gallery document already contains the first comment page. Reusing
+      // the verified detail response avoids a second full-page request on every
+      // open. Changing the official comment order recreates the preference-
+      // scoped runtime, so the cache cannot preserve the previous ordering.
+      return parseGalleryComments(parseHTML(galleryBody(manga, false), site()));
     },
 
     submitComment: function (manga, text) {

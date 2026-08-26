@@ -205,8 +205,29 @@ assert.match(novelDetails.info?.readingNote || "", /文字内容/);
 assert.equal(source.getChapterList(novelDetails).length, 0);
 
 const first = home.heroes[0].manga;
+// Reproduce a device that persisted a mirror which has since moved. The app
+// bridge exposes that redirect as its original 301 response when the target is
+// outside allowedHosts, so detail loading must evict it and continue.
+const redirectingHost = "www.cdnplaystation6.cc";
+const fetchBeforeRedirectProbe = globalThis.fetch;
+values.set("active_api_domain", redirectingHost);
+globalThis.fetch = (url, options = {}) => String(url).startsWith(`https://${redirectingHost}/`)
+  ? { status: 301, body: "", headers: { location: "https://jmcomicne.net/" } }
+  : fetchBeforeRedirectProbe(url, options);
 const detailRequestOffset = requestedURLs.length;
 const details = timed("detailMs", () => source.getMangaDetails(first));
+globalThis.fetch = fetchBeforeRedirectProbe;
+assert.equal(details.coverURL, first.coverURL,
+  "detail replaced the list-selected cover with a different crop");
+assert.equal(details.highResolutionCoverURL, first.coverURL,
+  "detail published a delayed alternate cover crop");
+const stableCover = source.getHighResolutionCover(first);
+assert.equal(stableCover.coverURL, first.coverURL,
+  "high-resolution cover lookup changed the visible composition");
+assert.equal(stableCover.highResolutionCoverURL, first.coverURL,
+  "high-resolution cover lookup published an alternate crop");
+assert.notEqual(values.get("active_api_domain"), redirectingHost,
+  "detail retained a redirecting API mirror after HTTP 301");
 const detailRequests = requestedURLs.slice(detailRequestOffset);
 assert.deepEqual(
   [...new Set(detailRequests.map((url) => url.match(/\/album\?id=([^&]+)/)?.[1]).filter(Boolean))],
@@ -252,6 +273,10 @@ assert.ok(Array.isArray(details.tagGroups), "detail tag groups are missing");
 assert.ok(details.tagGroups.every((group) => group.values.length > 0), "detail contains an empty tag group");
 assert.ok(Array.isArray(details.relatedMangas), "related manga are missing");
 assert.ok(Array.isArray(details.recommendations), "random recommendations are missing");
+assert.ok(details.relatedMangas.every((item) => String(item.id) !== String(details.id)),
+  "related manga included the current detail and can recurse into itself");
+assert.ok(details.recommendations.every((item) => String(item.id) !== String(details.id)),
+  "random recommendations included the current detail and can recurse into itself");
 const interaction = source.getInteractionState(details);
 assert.equal(interaction.isSupported, true);
 assert.equal(interaction.canLike, !interaction.isLiked);

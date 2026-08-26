@@ -23,6 +23,10 @@
   var runtimeAppVersion = null;
   var settingLoaded = false;
   var websiteHTMLCache = {};
+  // A mirror can stay in persistent storage after it starts redirecting or
+  // stops serving the signed mobile API. Keep short runtime cooldowns so one
+  // stale mirror cannot add its full timeout to every detail subrequest.
+  var apiDomainCooldowns = {};
   // A detail screen asks for the album and its chapter list separately. Keep
   // successful GET payloads for this source runtime so the same album is not
   // downloaded and decrypted twice while opening one screen.
@@ -54,6 +58,29 @@
     domains.splice(index, 1);
     domains.unshift(active);
     return domains;
+  }
+
+  function usableDomains(domains) {
+    var now = Date.now();
+    var usable = (domains || []).filter(function (host) {
+      return !apiDomainCooldowns[host] || apiDomainCooldowns[host] <= now;
+    });
+    return usable.length ? usable : (domains || []);
+  }
+
+  function markDomainFailure(host, error) {
+    if (!host) return;
+    var message = String(error && error.message ? error.message : error || '');
+    // Redirecting mirrors are migrations, not momentary packet loss. Keep
+    // those out for longer; transient TLS/timeouts get a short cooldown.
+    apiDomainCooldowns[host] = Date.now() + (/HTTP 3\d\d/.test(message) ? 5 * 60 * 1000 : 15 * 1000);
+    if (storage.get('active_api_domain') === host) storage.set('active_api_domain', '');
+  }
+
+  function markDomainSuccess(host) {
+    if (!host) return;
+    delete apiDomainCooldowns[host];
+    storage.set('active_api_domain', host);
   }
 
   function refreshDomains() {
@@ -111,7 +138,7 @@
     return JSON.parse(crypto.aes256ECBDecryptBase64(String(encoded), key));
   }
 
-  function requestOnce(host, path, method, fields, tokenSecret, tokenVersion) {
+  function requestOnce(host, path, method, fields, tokenSecret, tokenVersion, timeoutSeconds) {
     var ts = timestamp();
     var headers = {
       'Accept': 'application/json, text/plain, */*',
@@ -120,7 +147,7 @@
       'token': crypto.md5(ts + tokenSecret),
       'tokenparam': ts + ',' + (tokenVersion || '')
     };
-    var options = { method: method, headers: headers, timeout: 6 };
+    var options = { method: method, headers: headers, timeout: Number(timeoutSeconds || 6) };
     if (method === 'POST') {
       headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=utf-8';
       options.body = encodeForm(fields || {});
@@ -135,13 +162,13 @@
     }
     var payload = decodedPayload(outer, ts);
     if (payload && payload.error) throw new Error(String(payload.error));
-    storage.set('active_api_domain', host);
+    markDomainSuccess(host);
     return { data: payload, host: host, response: response };
   }
 
   function apiRequest(path, method, fields, tokenSecret, tokenVersion) {
     method = method || 'GET';
-    var domains = prioritizeDomain(savedDomains(), storage.get('active_api_domain'));
+    var domains = usableDomains(prioritizeDomain(savedDomains(), storage.get('active_api_domain')));
     var lastError = null;
     var activeDomain = storage.get('active_api_domain');
 
@@ -173,25 +200,28 @@
           if (Number(outer.code) !== 200) continue;
           var payload = decodedPayload(outer, ts);
           if (payload && payload.error) continue;
-          storage.set('active_api_domain', list[responseIndex]);
+          markDomainSuccess(list[responseIndex]);
           return { data: payload, host: list[responseIndex], response: response };
         } catch (error) {
           lastError = error;
         }
       }
+      list.forEach(function (host) { markDomainFailure(host, lastError || new Error('API probe failed')); });
       return null;
     }
 
-    function attempt(list) {
+    function attempt(list, timeoutSeconds) {
       for (var i = 0; i < list.length; i++) {
         try {
           return requestOnce(
             list[i], path, method, fields,
             tokenSecret || API_TOKEN_SECRET,
-            tokenVersion === undefined ? (method === 'POST' ? appVersion() : '') : tokenVersion
+            tokenVersion === undefined ? (method === 'POST' ? appVersion() : '') : tokenVersion,
+            timeoutSeconds
           );
         } catch (error) {
           lastError = error;
+          markDomainFailure(list[i], error);
         }
       }
       return null;
@@ -199,25 +229,31 @@
     var result = null;
     if (method === 'GET' && typeof requestAll === 'function') {
       if (activeDomain && domains[0] === activeDomain) {
-        result = attempt([activeDomain]);
+        // A remembered host gets a fast chance, then all alternatives race.
+        // This bounds a migrated 301/half-dead mirror to three seconds.
+        result = attempt([activeDomain], 3);
         if (!result) result = concurrentGET(domains.slice(1));
       } else {
         result = concurrentGET(domains);
       }
     } else {
-      result = attempt(domains);
+      // Mutations cannot safely race. Bound sequential fallback so a single
+      // action never waits through every historical mirror.
+      result = attempt(domains.slice(0, 4), 4);
     }
     if (!result) {
       var refreshed = refreshDomains();
       if (refreshed.length) {
-        var refreshedCandidates = unique(refreshed.concat(domains));
+        var refreshedCandidates = usableDomains(unique(refreshed.concat(domains)));
         result = method === 'GET' && typeof requestAll === 'function'
           ? concurrentGET(refreshedCandidates)
-          : attempt(refreshedCandidates);
+          : attempt(refreshedCandidates.slice(0, 4), 4);
       }
     }
     if (!result) {
-      throw new Error('禁漫天堂移动 API 当前不可用：' + String(lastError && lastError.message ? lastError.message : lastError));
+      var reason = String(lastError && lastError.message ? lastError.message : lastError || '线路探测失败');
+      if (/HTTP 3\d\d/.test(reason)) reason = '旧线路已迁移，自动刷新暂未取得可用线路';
+      throw new Error('禁漫天堂移动 API 暂时无法连接：' + reason);
     }
     return result;
   }
@@ -242,7 +278,7 @@
       });
     }
 
-    var domains = prioritizeDomain(savedDomains(), storage.get('active_api_domain'));
+    var domains = usableDomains(prioritizeDomain(savedDomains(), storage.get('active_api_domain')));
     for (var domainIndex = 0; domainIndex < domains.length; domainIndex++) {
       var host = domains[domainIndex];
       var ts = timestamp();
@@ -273,12 +309,13 @@
         }
       });
       if (decoded.some(function (value) { return value !== null; })) {
-        storage.set('active_api_domain', host);
+        markDomainSuccess(host);
         return decoded.map(function (value, index) {
           if (value !== null) return value;
           try { return apiGet(paths[index]); } catch (_) { return null; }
         });
       }
+      markDomainFailure(host, new Error('API batch failed'));
     }
     return paths.map(function (path) {
       try { return apiGet(path); } catch (_) { return null; }
@@ -563,7 +600,10 @@
       url: '/album/' + id,
       title: String(item.name || item.title || ('JM' + id)),
       coverURL: albumCover(id, !!highResolution),
-      highResolutionCoverURL: albumCover(id, true),
+      // A JM portrait URL is a different crop, not a transparent quality
+      // upgrade. Only callers that explicitly requested that composition may
+      // publish it; ordinary list records keep one stable cover identity.
+      highResolutionCoverURL: highResolution ? albumCover(id, true) : null,
       author: firstText(item.author),
       description: item.description ? String(item.description) : null,
       genres: genres,
@@ -605,7 +645,14 @@
   function mapDetailedAlbum(item, original) {
     item = item || {};
     original = original || {};
-    var result = mapAlbum(item, true);
+    // Keep the exact cover that the user tapped in the list. Replacing it with
+    // the portrait CDN variant after the detail request completes makes the
+    // visible cover jump to a tighter crop about a second after navigation.
+    // Detail metadata does not require a second cover identity.
+    var result = mapAlbum(item, false);
+    var stableCover = original.coverURL || result.coverURL;
+    result.coverURL = stableCover;
+    result.highResolutionCoverURL = stableCover;
     var originalInfo = original.info || {};
     var originalGenres = original.genres || [];
     var category = originalInfo.category || originalGenres[0] || result.info.category;
@@ -637,7 +684,9 @@
     ].filter(function (group) { return group.values.length > 0; });
     result.tagGroups = groups;
     result.tags = groups.reduce(function (all, group) { return all.concat(group.values); }, []);
-    result.relatedMangas = mapAlbums(item.related_list || [], 18);
+    result.relatedMangas = mapAlbums(item.related_list || [], 18).filter(function (manga) {
+      return manga.id !== result.id;
+    });
 
     // Recommendations already arrive with the album payload. Optional website
     // scraping and a second random-recommend API used to block the entire
@@ -1341,6 +1390,7 @@
 
   var commentPagingCache = {};
   var COMMENT_PAGE_SIZE = 30;
+  var COMMENT_PREVIEW_SIZE = 10;
   var COMMENT_FETCH_BATCH_SIZE = 8;
 
   function numericCommentTotal(manga) {
@@ -1365,9 +1415,11 @@
     }
   }
 
-  function fillCommentPending(state) {
+  function fillCommentPending(state, targetCount, maximumPasses) {
+    targetCount = Math.max(1, Number(targetCount || COMMENT_PAGE_SIZE));
+    maximumPasses = Math.max(1, Number(maximumPasses || 30));
     var guard = 0;
-    while (state.pending.length < COMMENT_PAGE_SIZE && guard++ < 30) {
+    while (state.pending.length < targetCount && guard++ < maximumPasses) {
       if (state.remainingPaths.length) {
         var paths = state.remainingPaths.splice(0, COMMENT_FETCH_BATCH_SIZE);
         apiGetBatch(paths).forEach(function (data) {
@@ -1424,10 +1476,20 @@
       };
       appendCommentList(state, root.list || []);
       scheduleForumRemainder(state, id, root);
+      // The album total includes comments attached to individual chapters.
+      // When the root page is empty, fetch a bounded preview immediately so
+      // the detail card does not claim there are hundreds of comments while
+      // rendering an empty preview. Full pagination remains incremental.
+      if (state.pending.length < COMMENT_PREVIEW_SIZE) {
+        fillCommentPending(state, COMMENT_PREVIEW_SIZE, 4);
+      }
       var firstComments = state.pending.splice(0, COMMENT_PAGE_SIZE);
       state.pages[1] = {
         comments: firstComments,
-        hasNextPage: state.pending.length > 0 || state.remainingPaths.length > 0 || !state.contextLoaded,
+        hasNextPage: state.pending.length > 0
+          || state.remainingPaths.length > 0
+          || !state.contextLoaded
+          || state.chapterIndex < state.chapterIDs.length,
         total: state.total
       };
       commentPagingCache[id] = state;
@@ -1437,7 +1499,7 @@
     var highest = 1;
     Object.keys(state.pages).forEach(function (key) { highest = Math.max(highest, Number(key || 1)); });
     while (highest < page) {
-      fillCommentPending(state);
+      fillCommentPending(state, COMMENT_PAGE_SIZE, 30);
       highest += 1;
       var comments = state.pending.splice(0, COMMENT_PAGE_SIZE);
       state.pages[highest] = {
@@ -2115,8 +2177,10 @@
     getHighResolutionCover: function (manga) {
       var copy = {};
       Object.keys(manga).forEach(function (key) { copy[key] = manga[key]; });
-      var kind = manga.info && manga.info.contentKind;
-      if (!kind || kind === 'comic') copy.coverURL = albumCover(albumID(manga.id || manga.url), true);
+      // JM's alternate portrait URL uses a different crop rather than merely
+      // a higher-resolution copy. Preserve the list/detail cover identity so
+      // native clients never replace the visible composition after navigation.
+      copy.highResolutionCoverURL = copy.coverURL || null;
       return copy;
     },
 
