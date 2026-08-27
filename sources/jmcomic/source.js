@@ -178,7 +178,7 @@
     // preferred order. Once a winner is remembered, the normal path remains a
     // single request to that host.
     function concurrentGET(list) {
-      if (method !== 'GET' || typeof requestAll !== 'function' || !list.length) return null;
+      if (method !== 'GET' || !list.length) return null;
       var ts = timestamp();
       var secret = tokenSecret || API_TOKEN_SECRET;
       var version = tokenVersion === undefined ? '' : tokenVersion;
@@ -189,8 +189,51 @@
         'token': crypto.md5(ts + secret),
         'tokenparam': ts + ',' + version
       };
-      var responses = requestAll(list.map(function (host) {
-        return { url: 'https://' + host + path, method: 'GET', headers: headers, timeout: 6 };
+      var requestSpecs = list.map(function (host) {
+        return {
+          url: 'https://' + host + path,
+          method: 'GET',
+          headers: headers,
+          timeout: 4,
+          requiresJSON: true
+        };
+      });
+      // `requestAll` waits for the slowest mirror before JavaScript receives
+      // any response. The native `requestFirst` bridge instead cancels the
+      // losing probes as soon as the first 2xx JSON response arrives. This is
+      // the difference between a sub-second healthy mirror and the old fixed
+      // 5-6 second floor on every cold detail request.
+      if (typeof requestFirst === 'function') {
+        var winner = requestFirst(requestSpecs) || {};
+        if (!winner.error && Number(winner.status) >= 200 && Number(winner.status) < 300) {
+          try {
+            var winnerOuter = JSON.parse(winner.body || '{}');
+            if (Number(winnerOuter.code) === 200) {
+              var winnerPayload = decodedPayload(winnerOuter, ts);
+              if (!(winnerPayload && winnerPayload.error)) {
+                var winnerHost = null;
+                for (var winnerIndex = 0; winnerIndex < list.length; winnerIndex++) {
+                  if (String(winner.url || '').indexOf('https://' + list[winnerIndex] + '/') === 0) {
+                    winnerHost = list[winnerIndex];
+                    break;
+                  }
+                }
+                winnerHost = winnerHost || list[0];
+                markDomainSuccess(winnerHost);
+                return { data: winnerPayload, host: winnerHost, response: winner };
+              }
+            }
+          } catch (winnerError) {
+            lastError = winnerError;
+          }
+        }
+      }
+      if (typeof requestAll !== 'function') return null;
+      // Compatibility path for an older host App: probe only a small batch and
+      // cap it at three seconds instead of waiting on every historical mirror.
+      var boundedList = list.slice(0, 4);
+      var responses = requestAll(boundedList.map(function (host) {
+        return { url: 'https://' + host + path, method: 'GET', headers: headers, timeout: 3 };
       })) || [];
       for (var responseIndex = 0; responseIndex < responses.length; responseIndex++) {
         try {
@@ -200,13 +243,13 @@
           if (Number(outer.code) !== 200) continue;
           var payload = decodedPayload(outer, ts);
           if (payload && payload.error) continue;
-          markDomainSuccess(list[responseIndex]);
-          return { data: payload, host: list[responseIndex], response: response };
+          markDomainSuccess(boundedList[responseIndex]);
+          return { data: payload, host: boundedList[responseIndex], response: response };
         } catch (error) {
           lastError = error;
         }
       }
-      list.forEach(function (host) { markDomainFailure(host, lastError || new Error('API probe failed')); });
+      boundedList.forEach(function (host) { markDomainFailure(host, lastError || new Error('API probe failed')); });
       return null;
     }
 
@@ -227,21 +270,27 @@
       return null;
     }
     var result = null;
-    if (method === 'GET' && typeof requestAll === 'function') {
-      if (activeDomain && domains[0] === activeDomain) {
-        // A remembered host gets a fast chance, then all alternatives race.
-        // This bounds a migrated 301/half-dead mirror to three seconds.
-        result = attempt([activeDomain], 3);
-        if (!result) result = concurrentGET(domains.slice(1));
-      } else {
-        result = concurrentGET(domains);
-      }
+    if (method === 'GET' && (typeof requestFirst === 'function' || typeof requestAll === 'function')) {
+      // The remembered mirror participates in the same race. Giving it a
+      // serial "fast chance" still imposed a two-second penalty whenever that
+      // once-good host migrated or became half-open—the exact remaining
+      // fast/slow variance users observed after the first optimization pass.
+      result = concurrentGET(domains);
     } else {
-      // Mutations cannot safely race. Bound sequential fallback so a single
-      // action never waits through every historical mirror.
-      result = attempt(domains.slice(0, 4), 4);
+      // Favorite/like/tracking are toggle endpoints, so racing or blindly
+      // retrying after a timeout can apply the action twice and undo it. Use
+      // the mirror already proven by the preceding detail GET. A definite
+      // 3xx/404 is safe to retry once on another current mirror; an ambiguous
+      // timeout is surfaced without a second mutation.
+      var mutationHost = activeDomain || domains[0];
+      result = mutationHost ? attempt([mutationHost], 5) : null;
+      var mutationError = String(lastError && lastError.message ? lastError.message : lastError || '');
+      if (!result && /HTTP (?:3\d\d|404)/.test(mutationError)) {
+        var alternative = domains.filter(function (host) { return host !== mutationHost; })[0];
+        if (alternative) result = attempt([alternative], 5);
+      }
     }
-    if (!result) {
+    if (!result && method === 'GET') {
       var refreshed = refreshDomains();
       if (refreshed.length) {
         var refreshedCandidates = usableDomains(unique(refreshed.concat(domains)));
@@ -578,6 +627,20 @@
     return match ? match[1] : String(value || '').replace(/\D/g, '');
   }
 
+  function searchAlbumID(value) {
+    var normalized = String(value || '').trim()
+      .replace(/[０-９]/g, function (digit) { return String(digit.charCodeAt(0) - 0xFEE0); })
+      .replace(/[Ｊｊ]/g, 'J')
+      .replace(/[Ｍｍ]/g, 'M')
+      .replace(/[Ｇｇ]/g, 'G');
+    var match = normalized.match(/^https?:\/\/[^/]+\/album\/(\d{1,12})(?:[/?#]|$)/i)
+      || normalized.match(/^(?:JM|GM)\s*[-:#：]?\s*(\d{1,12})$/i)
+      || normalized.match(/^(\d{1,12})$/);
+    if (!match) return null;
+    var canonical = String(match[1]).replace(/^0+/, '');
+    return canonical || null;
+  }
+
   function mapAlbum(item, highResolution) {
     item = item || {};
     var id = String(item.id || item.AID || '');
@@ -593,6 +656,8 @@
     if (item.total_views !== undefined && item.total_views !== null) info.views = String(item.total_views);
     if (item.total_photos !== undefined && item.total_photos !== null) info.pages = String(item.total_photos);
     if (item.comment_total !== undefined && item.comment_total !== null) info.comments = String(item.comment_total);
+    if (item.liked !== undefined && item.liked !== null) info.isLiked = isEnabledValue(item.liked) ? 'true' : 'false';
+    if (item.is_favorite !== undefined && item.is_favorite !== null) info.isFavorited = isEnabledValue(item.is_favorite) ? 'true' : 'false';
     if (item.addtime) info.updatedAt = dateText(item.addtime);
     if (item.update_at) info.updatedAt = dateText(item.update_at);
     return {
@@ -1275,7 +1340,37 @@
       + '&o=' + encodeURIComponent(order || 'mr')
       + '&t=' + encodeURIComponent(time || 'a');
     var data = apiGet(path) || {};
+    var redirectID = searchAlbumID(data.redirect_aid);
+    if (redirectID) return albumSearchPage(redirectID, page);
     return paged(data.content || [], page, data.total, 80);
+  }
+
+  function albumSearchPage(id, page) {
+    if (Number(page || 1) !== 1) return { items: [], hasNextPage: false };
+    var detail = apiGet('/album?id=' + encodeURIComponent(id)) || {};
+    if (!detail.id && !detail.name) return { items: [], hasNextPage: false };
+    return { items: [mapAlbum(detail, false)], hasNextPage: false };
+  }
+
+  function websiteSearchPage(page, query, mainTag, category, subCategory, order, time) {
+    var path = '/search/photos';
+    if (category && category !== '0') {
+      path += '/' + encodeURIComponent(category);
+      if (subCategory && subCategory !== '0') path += '/sub/' + encodeURIComponent(subCategory);
+    }
+    path += '?main_tag=' + encodeURIComponent(mainTag || '0')
+      + '&search_query=' + encodeURIComponent(query || '')
+      + '&page=' + Number(page || 1)
+      + '&o=' + encodeURIComponent(order || 'mr')
+      + '&t=' + encodeURIComponent(time || 'a');
+    var doc = websiteDocument(path, 12);
+    var items = parseAlbumCards(doc);
+    var nextPage = Number(page || 1) + 1;
+    var hasNext = false;
+    if (doc && typeof doc.select === 'function') {
+      hasNext = doc.select('a[href*="page=' + nextPage + '"]').length > 0;
+    }
+    return { items: items, hasNextPage: hasNext };
   }
 
   function filterValue(filters, key, fallback) {
@@ -1637,7 +1732,13 @@
       };
     }
     var id = albumID(manga.id || manga.url);
-    var album = albumInteraction(id);
+    if (interactionCache[id]) return interactionCache[id];
+    var info = manga.info || {};
+    var album = {
+      isLiked: isEnabledValue(info.isLiked),
+      likeCount: info.likes === undefined ? null : String(info.likes),
+      isFavorited: isEnabledValue(info.isFavorited)
+    };
     var tracked = false;
     try {
       tracked = trackingInteraction(id);
@@ -1980,10 +2081,11 @@
 
   function favoriteState(manga) {
     var id = albumID(manga.id || manga.url);
-    var detail = albumInteraction(id);
+    var info = manga.info || {};
+    var cached = favoriteCache[id];
     var state = {
       isSupported: true,
-      isFavorited: detail.isFavorited,
+      isFavorited: cached ? cached.isFavorited : isEnabledValue(info.isFavorited),
       category: null,
       categories: [],
       note: null,
@@ -2004,18 +2106,10 @@
           || (desired ? '官网尚未确认收藏，请稍后重试' : '官网尚未确认取消收藏，请稍后重试'));
         return state;
       }
-      var verified = confirmAlbumInteraction(id, function (latest) {
-        return latest.isFavorited === desired;
-      });
-      state.isFavorited = !!(verified && verified.isFavorited);
-      if (state.isFavorited !== desired) {
-        state.isSupported = false;
-        state.message = desired
-          ? '官网尚未同步收藏状态，已恢复原状态'
-          : '官网尚未同步取消收藏状态，已恢复原状态';
-        favoriteCache[id] = state;
-        return state;
-      }
+      // `status: ok` is the official acknowledgement. A second album request
+      // used to add another network round-trip (twice when propagation lagged)
+      // and made a successful tap look like a timeout.
+      state.isFavorited = desired;
     }
     state.message = desired ? '已加入禁漫天堂收藏' : '已从禁漫天堂收藏移除';
     favoriteCache[id] = state;
@@ -2111,16 +2205,22 @@
       var homeSection = filterValue(filters, 'home_section', '');
       if (homeSection) return homeSectionResult(homeSection, page);
       var mainTags = ['0', '1', '2', '3', '4'];
-      var categories = ['0', 'doujin', 'single', 'short', 'another', 'hanman', 'meiman', 'doujin_cosplay', '3D'];
+      var categories = ['0', 'doujin', 'single', 'short', 'another', 'hanman', 'meiman', 'doujin_cosplay', '3D', 'english_site'];
+      var subCategories = ['0', 'chinese', 'japanese', 'CG', 'youth', 'other', '3d', 'cosplay'];
       var orders = ['mr', 'mv', 'mp', 'tf'];
       var times = ['a', 't', 'w', 'm'];
       var mainTag = mainTags[Number(filterValue(filters, 'search_type', '0'))] || '0';
       var category = categories[Number(filterValue(filters, 'category', '0'))] || '0';
+      var subCategory = subCategories[Number(filterValue(filters, 'sub_category', '0'))] || '0';
       var order = orders[Number(filterValue(filters, 'ordering', '0'))] || 'mr';
       var time = times[Number(filterValue(filters, 'time', '0'))] || 'a';
-      return String(query || '').trim()
-        ? searchPage(page, query, mainTag, order, time)
-        : categoryPage(page, category, order, time);
+      var normalizedQuery = String(query || '').trim();
+      if (!normalizedQuery) return categoryPage(page, category, order, time);
+      var directID = searchAlbumID(normalizedQuery);
+      if (directID) return albumSearchPage(directID, page);
+      return category !== '0' || subCategory !== '0'
+        ? websiteSearchPage(page, normalizedQuery, mainTag, category, subCategory, order, time)
+        : searchPage(page, normalizedQuery, mainTag, order, time);
     },
 
     getToplist: function (page, period) {
@@ -2437,16 +2537,9 @@
           return articleState;
         }
         apiPost('/blog_like', { id: articleID });
-        var verifiedArticle = confirmArticleInteraction(articleID, function (latest) { return latest.isLiked; });
-        if (!verifiedArticle || !verifiedArticle.isLiked) {
-          articleState.isSupported = false;
-          articleState.message = '官网尚未确认文章喜欢状态，请稍后重试';
-          interactionCache[articleKey] = articleState;
-          return articleState;
-        }
         articleState = {
           isSupported: true, canLike: false, isLiked: true,
-          likeCount: verifiedArticle.likeCount || adjustedCount(articleState.likeCount, 1),
+          likeCount: adjustedCount(articleState.likeCount, 1),
           canTrack: false, isTracked: false, message: '已喜欢这篇文章'
         };
         interactionCache[articleKey] = articleState;
@@ -2477,14 +2570,7 @@
           state.message = String((result && (result.msg || result.message)) || '官网尚未确认点赞，请稍后重试');
           return state;
         }
-        var verified = confirmAlbumInteraction(id, function (latest) { return latest.isLiked; });
-        if (!verified || !verified.isLiked) {
-          state.isSupported = false;
-          state.message = '官网尚未同步喜欢状态，已恢复原状态';
-          interactionCache[id] = state;
-          return state;
-        }
-        state.likeCount = verified.likeCount || adjustedCount(state.likeCount, 1);
+        state.likeCount = adjustedCount(state.likeCount, 1);
       }
       state = {
         isSupported: true,
@@ -2505,29 +2591,25 @@
       var id = albumID(manga.id || manga.url);
       var state = interactionCache[id] || interactionState(manga);
       if (state.isTracked !== !!desired) apiPost('/album_sertracking', { id: albumID(manga.id || manga.url) });
-      var verified = confirmTrackingInteraction(id, !!desired);
       state = {
-        isSupported: verified === !!desired,
+        isSupported: true,
         canLike: true,
         isLiked: state.isLiked,
         likeCount: state.likeCount,
         canTrack: true,
-        isTracked: verified,
+        isTracked: !!desired,
         message: null
       };
       interactionCache[id] = state;
-      if (!state.isSupported) {
-        state.message = desired ? '官网尚未确认追更，请稍后重试' : '官网尚未确认关闭追更，请稍后重试';
-        return state;
-      }
       state.message = state.isTracked ? '已开启连载追踪' : '已关闭连载追踪';
       return state;
     },
 
     getFilterList: function () {
       return [
-        { key: 'search_type', name: '搜索范围', kind: 'select', values: ['全部', '作品', '作者', '标签', '角色'], defaultValue: '0', scope: 'keyword' },
-        { key: 'category', name: '分类', kind: 'select', values: ['全部', '同人', '单本', '短篇', '其他', '韩漫', '美漫', 'Cosplay', '3D'], defaultValue: '0', scope: 'browse' },
+        { key: 'search_type', name: '搜索范围', kind: 'select', values: ['站内全部', '作品名称', '作者', '分类标签', '登场人物'], defaultValue: '0', scope: 'keyword' },
+        { key: 'category', name: '分类', kind: 'select', values: ['全部', '同人', '单本', '短篇', '其他', '韩漫', '美漫', 'Cosplay', '3D', '英文站'], defaultValue: '0', scope: 'all' },
+        { key: 'sub_category', name: '副分类', kind: 'select', values: ['全部', '中文／汉化', '日文', 'CG', '青年漫画', '其他漫画', '3D', 'Cosplay'], defaultValue: '0', scope: 'keyword' },
         { key: 'ordering', name: '排序', kind: 'sort', values: ['最新', '最多观看', '图片最多', '最多喜欢'], defaultValue: '0', scope: 'all' },
         { key: 'time', name: '时间', kind: 'select', values: ['全部', '今日', '本周', '本月'], defaultValue: '0', scope: 'all' }
       ];

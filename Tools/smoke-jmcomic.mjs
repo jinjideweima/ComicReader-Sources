@@ -375,6 +375,24 @@ assert.ok(pages.every((page) => !page.imageTransform || page.imageTransform.segm
 const search = source.search(1, details.title, []);
 assert.ok(Array.isArray(search.items));
 
+for (const vehicleQuery of [
+  String(details.id),
+  `JM${details.id}`,
+  `gm-${details.id}`,
+  `ＪＭ${String(details.id).replace(/[0-9]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xFEE0))}`,
+]) {
+  const vehicleSearch = source.search(1, vehicleQuery, []);
+  assert.equal(vehicleSearch.items.length, 1, `vehicle search failed for ${vehicleQuery}`);
+  assert.equal(String(vehicleSearch.items[0].id), String(details.id));
+  assert.equal(vehicleSearch.hasNextPage, false);
+}
+
+const searchFilters = source.getFilterList();
+const searchScope = searchFilters.find((filter) => filter.key === "search_type");
+assert.deepEqual(searchScope?.values, ["站内全部", "作品名称", "作者", "分类标签", "登场人物"]);
+assert.equal(searchFilters.find((filter) => filter.key === "category")?.scope, "all");
+assert.ok(searchFilters.some((filter) => filter.key === "sub_category"), "official sub-category search is missing");
+
 console.log(JSON.stringify({
   timings,
   heroCount: home.heroes.length,
