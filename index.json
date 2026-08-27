@@ -144,7 +144,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "BfUEkm5sP+DN2bay1Mz66XjweaQwvXJvwk+uh+vt36zI6QYSh6T0u5odHIax9w8krbNkcdkzbWnwI82GOkgKAw=="
+        "value" : "CyDvlD0BjN8DoZ1/Fqg6QMp4qyUArt3Q9s9uttTf05qyDc1rLfXnyHZc+9mhviTx53cUvSRtvszF7GdXqzRlBg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -268,7 +268,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "LEekngSEYZCh5llkfMCw9j1X1iIeVf+m+YFyWKJTVSnh8UWAQ/SjLIf7InnJykickaXrYOavT3epbG/fBZgCAQ=="
+        "value" : "WT0xa7B0NL7qThtdzKQPyxkA9UC/v6oVHr6XfWXIAzrfOevI4VfjXSmzKsUmY55arXx1HcTRXONPAZJvooJBDw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -491,7 +491,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "8Xm36sSXhY5qC+GxBIdgj0gwbcdMM8WKfOUfRxw56EyyhV16CiphEhRr9h3Iekd9SU9phwlzZl75pU1U8MqFCw=="
+        "value" : "hXccBJ1y6b02+SMFwmzFK1JVEK5DuHeS67Sv0uZQVa4kqmYqvY2eQQSFBHr4Wn+Drvw0Qh5cziepMw3t78pACg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.5.3"
@@ -655,7 +655,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "BsTMCIIxqJhPdZ0PKCNH53M0PDif8NniN+40V3dmZQK85IJfoZhVIMmlvjA9+uJvKSWIRP+457nOvtmnYg2sAg=="
+        "value" : "0OEAzBl+Ch7oZKgJ8UT64yBzdJcF/g9H+b9S2sWfNrTpzGvuP9w7nK8KqRMhh8zDv/Zf0VVJD3VSwWfY1vHUAQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
@@ -742,7 +742,7 @@
         },
         {
           "category" : "discovery",
-          "description" : "直接搜索 JM/GM 车牌，并按作品、作者、标签、角色、分类、副分类、时间和热度组合筛选。",
+          "description" : "直接搜索 JM 车牌，并按作品、作者、标签、角色、分类、副分类、时间和热度组合筛选。",
           "id" : "search_filters",
           "title" : "搜索与筛选"
         },
@@ -809,14 +809,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
-      "sha256" : "ae7f0cfe937a5dbe767cfcaa732e4bb14b97f0ec56ba6b8a6f3435d4c295ec3d",
+      "sha256" : "da485e1b62b50c8a081a24c17381f85f0bdefbb47dc1397aeec6e7634a7d60a3",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "epfQKfX/7ch8h+zqGBJ3P4G/AiMxRpGB7IRDtLlIHIvAj1V3Y2BplNPoyNI5ah3omCaXqAdIrw3D963XIoNDDw=="
+        "value" : "OqvovPr2u+F6Kz9zEBCYsm6epHZaPN7S3snHvHq5LRG0jqezBpNGtRFyNQ8Q19FnMLQNp8kL0pZtEHvHO44HCg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.4.9"
+      "version" : "1.4.10"
     }
   ]
 }

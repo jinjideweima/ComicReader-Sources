@@ -631,10 +631,9 @@
     var normalized = String(value || '').trim()
       .replace(/[０-９]/g, function (digit) { return String(digit.charCodeAt(0) - 0xFEE0); })
       .replace(/[Ｊｊ]/g, 'J')
-      .replace(/[Ｍｍ]/g, 'M')
-      .replace(/[Ｇｇ]/g, 'G');
+      .replace(/[Ｍｍ]/g, 'M');
     var match = normalized.match(/^https?:\/\/[^/]+\/album\/(\d{1,12})(?:[/?#]|$)/i)
-      || normalized.match(/^(?:JM|GM)\s*[-:#：]?\s*(\d{1,12})$/i)
+      || normalized.match(/^JM\s*[-:#：]?\s*(\d{1,12})$/i)
       || normalized.match(/^(\d{1,12})$/);
     if (!match) return null;
     var canonical = String(match[1]).replace(/^0+/, '');

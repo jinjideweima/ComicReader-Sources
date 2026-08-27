@@ -43,12 +43,24 @@ vm.runInThisContext(sourceCode, { filename: "sources/jmcomic/source.js" });
 const source = globalThis.__source;
 assert.ok(source, "source.js did not register globalThis.__source");
 
-for (const query of ["427413", "JM427413", "gm-427413", "ＪＭ４２７４１３"]) {
+for (const query of ["427413", "JM427413", "ＪＭ４２７４１３"]) {
+  const requestStart = requestedPaths.length;
   const result = source.search(1, query, []);
   assert.equal(result.items.length, 1, `vehicle search failed for ${query}`);
   assert.equal(result.items[0].id, album.id);
   assert.equal(result.hasNextPage, false);
+  assert.ok(
+    requestedPaths.slice(requestStart).some((path) => path.startsWith("/album?id=")),
+    `vehicle search did not use the direct album endpoint for ${query}`,
+  );
 }
+
+const gmRequestStart = requestedPaths.length;
+source.search(1, "GM427413", []);
+assert.ok(
+  requestedPaths.slice(gmRequestStart).every((path) => !path.startsWith("/album?id=")),
+  "GM must not be treated as a JMComic vehicle prefix",
+);
 
 const redirected = source.search(1, "redirect-me", []);
 assert.equal(redirected.items.length, 1);
