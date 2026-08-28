@@ -5,6 +5,9 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade JMComic to 1.4.20: expose the real account favorite-folder IDs,
+  names, and counts with every cloud-shelf response so iOS and macOS can show
+  the official folders instead of placeholder categories.
 - Upgrade JMComic to 1.4.19: keep initial interaction reads on the authenticated
   mobile replica while iOS performs favorite and one-way rating through its
   isolated same-session WebKit broker, avoiding the website-cookie replay path.

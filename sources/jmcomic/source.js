@@ -1955,14 +1955,20 @@
 
   function captureFavoriteFolders(data) {
     if (!data || !Array.isArray(data.folder_list)) return fastFavoriteFolders();
-    var folders = [{ id: 0, name: '全部' }];
+    var folders = [{ id: 0, name: '全部', count: Number(data.total || 0) }];
     (data && data.folder_list || []).forEach(function (folder) {
       var rawID = folder && (folder.FID !== undefined ? folder.FID : folder.id);
       var id = Number(rawID);
       var name = String(folder && (folder.name || folder.title) || '').trim();
       if (!isFinite(id) || id < 0 || !name) return;
       if (folders.some(function (item) { return item.id === Math.floor(id); })) return;
-      folders.push({ id: Math.floor(id), name: name });
+      var rawCount = folder && (folder.count !== undefined ? folder.count : folder.total);
+      var count = Number(rawCount);
+      folders.push({
+        id: Math.floor(id),
+        name: name,
+        count: isFinite(count) && count >= 0 ? Math.floor(count) : null
+      });
     });
     favoriteFolderCache = folders;
     favoriteFolderCacheReadAt = Date.now();
@@ -1978,7 +1984,13 @@
         favoriteFolderCache = persisted.filter(function (folder) {
           return folder && isFinite(Number(folder.id)) && String(folder.name || '').trim();
         }).map(function (folder) {
-          return { id: Math.floor(Number(folder.id)), name: String(folder.name).trim() };
+          return {
+            id: Math.floor(Number(folder.id)),
+            name: String(folder.name).trim(),
+            count: folder.count !== null && folder.count !== undefined && isFinite(Number(folder.count))
+              ? Math.floor(Number(folder.count))
+              : null
+          };
         });
       }
     } catch (_) {}
@@ -2939,13 +2951,26 @@
         path += '&folder_id=' + encodeURIComponent(category);
       }
       var data = apiGet(path) || {};
-      captureFavoriteFolders(data);
+      var folders = captureFavoriteFolders(data);
+      var metadata = {
+        favoriteCategoryIDs: folders.map(function (folder) { return String(folder.id); }).join(',')
+      };
+      folders.forEach(function (folder) {
+        metadata['favoriteCategoryName' + folder.id] = String(folder.name || '收藏夹 ' + folder.id);
+        if (folder.count !== null && folder.count !== undefined) {
+          metadata['favoriteCategoryCount' + folder.id] = String(folder.count);
+        }
+      });
       var items = mapAlbums(data.list || []);
       if (query) {
         var needle = String(query).toLowerCase();
         items = items.filter(function (item) { return item.title.toLowerCase().indexOf(needle) >= 0; });
       }
-      return { items: items, hasNextPage: Number(page || 1) * 20 < Number(data.total || 0) };
+      return {
+        items: items,
+        hasNextPage: Number(page || 1) * 20 < Number(data.total || 0),
+        metadata: metadata
+      };
     },
 
     getHistory: function (page, query) {

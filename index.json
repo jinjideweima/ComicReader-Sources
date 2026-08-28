@@ -144,7 +144,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "CyDvlD0BjN8DoZ1/Fqg6QMp4qyUArt3Q9s9uttTf05qyDc1rLfXnyHZc+9mhviTx53cUvSRtvszF7GdXqzRlBg=="
+        "value" : "7/ophjld3pxReKPVpkZdLIvemPqRfAiKUEw97I0Nxbr2XxRIuoY5WfeiLY3VNz3/FeLPXPB1LBwL3zXRDnfwAQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -268,7 +268,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "WT0xa7B0NL7qThtdzKQPyxkA9UC/v6oVHr6XfWXIAzrfOevI4VfjXSmzKsUmY55arXx1HcTRXONPAZJvooJBDw=="
+        "value" : "3ny8xsYcf/5dDLwCZ+YR4fQrgktpfgNmuKAzmNxGULc6+df1oXR6bHjLIUfbWCAyv1s6bnoEtelrtWmokx+qDQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -491,7 +491,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "hXccBJ1y6b02+SMFwmzFK1JVEK5DuHeS67Sv0uZQVa4kqmYqvY2eQQSFBHr4Wn+Drvw0Qh5cziepMw3t78pACg=="
+        "value" : "pyr939gfUs/RD45Ro6XuyOAKYXv3a1cFPusizc/9ocf9/dNecDLdT04uJ9oL/T76Uqc+snud+FQoAoqzTn75Dw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.5.3"
@@ -655,7 +655,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "0OEAzBl+Ch7oZKgJ8UT64yBzdJcF/g9H+b9S2sWfNrTpzGvuP9w7nK8KqRMhh8zDv/Zf0VVJD3VSwWfY1vHUAQ=="
+        "value" : "QXeekvJ9RhURFAY+/QM/Tk8sWrcVK9LGRDnk7aeMWL6Z/nd+7aIDwK+ZeE/zvJ9QeGUrng3xFG1+0la5Xva3DA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
@@ -815,10 +815,10 @@
         },
         {
           "category" : "account",
-          "description" : "安全保存登录资料，原生展示等级资产、资料、任务、签到、信箱、收藏、追踪和历史；消费型功能保持只读。",
+          "description" : "安全保存登录资料，并以账号绑定的漫画收藏作为核心入口。",
           "id" : "account_overview",
           "requiresAccount" : true,
-          "title" : "安全登录与账号资料"
+          "title" : "安全登录与漫画收藏"
         }
       ],
       "id" : "jmcomic",
@@ -838,14 +838,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
-      "sha256" : "6475b64d25ac6a6c78d72b5b40ae1f36f30a4554cb85c36d3fe38cf752b2ab9f",
+      "sha256" : "3ddfedaa12199b076e510b7732102287c8547fa992eaa83f7b9ff18c527c3a01",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "kII2KrbM8VgkJ/4H5OPmJK+okv19Zodaqvpsc+Ko9Ja/oJokBV5O++DxAnwIW6NOYQu82rzlUIL/BjYT0bLjDA=="
+        "value" : "1D/beyzFx/+5hzzp+YsCHKW5+0rJyqR8cj6681zYK6/CpcAqThLxAmGD73U6XpYzLO9tDvGSvharEnZWRQQlDw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.4.19"
+      "version" : "1.4.20"
     }
   ]
 }

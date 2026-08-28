@@ -112,7 +112,10 @@ function makeRuntime(initial = {}, behavior = {}) {
           return apiResponse({ is_tracking: state.tracked ? "1" : "0" });
         }
         if (parsed.pathname === "/favorite") {
-          return apiResponse({ folder_list: [{ FID: "7", name: "私人" }] });
+          return apiResponse({
+            total: 3,
+            folder_list: [{ FID: "7", name: "私人", count: 2 }],
+          });
         }
         if (parsed.pathname === "/setting") {
           return apiResponse({ jm3_version: behavior.settingVersion });
@@ -174,7 +177,11 @@ function makeRuntime(initial = {}, behavior = {}) {
 
 {
   const runtime = makeRuntime();
-  runtime.source.getFavorites(1, 0, null);
+  const page = runtime.source.getFavorites(1, 0, null);
+  assert.equal(page.metadata.favoriteCategoryIDs, "0,7");
+  assert.equal(page.metadata.favoriteCategoryName0, "全部");
+  assert.equal(page.metadata.favoriteCategoryName7, "私人");
+  assert.equal(page.metadata.favoriteCategoryCount7, "2");
   const favorite = runtime.source.getFavoriteState(manga);
   assert.deepEqual(Array.from(favorite.categories, (item) => [item.id, item.name]),
     [[0, "全部"], [7, "私人"]], "the shelf refreshes the fast persisted folder cache");
