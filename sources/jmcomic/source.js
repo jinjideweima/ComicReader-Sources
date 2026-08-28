@@ -5,16 +5,16 @@
   var API_CONTENT_TOKEN_SECRET = '18comicAPPContent';
   var API_DATA_SECRET = '185Hcomic3PAPP7R';
   var DOMAIN_SERVER_SECRET = 'diosfjckwpqpdfjkvnqQjsik';
-  var DEFAULT_APP_VERSION = '2.0.33';
+  var DEFAULT_APP_VERSION = '2.1.4';
   var API_UA = 'Mozilla/5.0 (Linux; Android 9; V1938CT Build/PQ3A.190705.11211812; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Safari/537.36';
+  var WEBSITE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
   var DOMAIN_SERVERS = [
     'https://rup4a04-c01.tos-ap-southeast-1.bytepluses.com/newsvr-2025.txt',
     'https://rup4a04-c02.tos-cn-hongkong.bytepluses.com/newsvr-2025.txt'
   ];
   var FALLBACK_API_DOMAINS = [
-    'www.cdnhth.club', 'www.cdngwc.cc', 'www.cdngwc.net', 'www.cdngwc.club', 'www.cdnhjk.cc',
-    'www.cdnaspa.vip', 'www.cdnaspa.club', 'www.cdnplaystation6.org',
-    'www.cdnplaystation6.vip', 'www.cdnplaystation6.cc'
+    'www.cdnhjk.net', 'www.cdngwc.club', 'www.cdnhth.club',
+    'www.cdnhjk.cc', 'www.cdnutc.me', 'www.cdngwc.net', 'www.cdngwc.cc'
   ];
   var FALLBACK_IMAGE_HOST = 'https://tencent.jmdanjonproxy.xyz';
   var WEBSITE_BASE = 'https://18comic.vip';
@@ -22,6 +22,8 @@
   var runtimeImageHost = null;
   var runtimeAppVersion = null;
   var settingLoaded = false;
+  var SETTING_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+  var API_DOMAIN_CATALOG_VERSION = '2026-08-28.3';
   var websiteHTMLCache = {};
   // A mirror can stay in persistent storage after it starts redirecting or
   // stops serving the signed mobile API. Keep short runtime cooldowns so one
@@ -31,6 +33,15 @@
   // successful GET payloads for this source runtime so the same album is not
   // downloaded and decrypted twice while opening one screen.
   var apiGETCache = {};
+
+  if (storage.get('api_domain_catalog_version') !== API_DOMAIN_CATALOG_VERSION) {
+    // Do this once on the source upgrade. Otherwise a host remembered by an
+    // older build gets a serial timeout before the new live catalog can race.
+    storage.set('active_api_domain', '');
+    storage.set('account_api_domain', '');
+    storage.set('api_domains', '[]');
+    storage.set('api_domain_catalog_version', API_DOMAIN_CATALOG_VERSION);
+  }
 
   function unique(values) {
     var seen = {};
@@ -45,6 +56,9 @@
   function savedDomains() {
     try {
       var parsed = JSON.parse(storage.get('api_domains') || '[]');
+      // The encrypted publisher catalog is newer than the bundled emergency
+      // list. The catalog version reset above prevents an older installation
+      // from keeping retired hosts in front after a source upgrade.
       return unique(parsed.concat(FALLBACK_API_DOMAINS));
     } catch (_) {
       return FALLBACK_API_DOMAINS.slice();
@@ -71,9 +85,15 @@
   function markDomainFailure(host, error) {
     if (!host) return;
     var message = String(error && error.message ? error.message : error || '');
-    // Redirecting mirrors are migrations, not momentary packet loss. Keep
-    // those out for longer; transient TLS/timeouts get a short cooldown.
-    apiDomainCooldowns[host] = Date.now() + (/HTTP 3\d\d/.test(message) ? 5 * 60 * 1000 : 15 * 1000);
+    // Redirecting and missing mirrors are migrations, not momentary packet
+    // loss. TLS failures and timeouts also need a meaningful cooldown: a
+    // fifteen-second retry window merely made the same dead host stall every
+    // account action again.
+    var cooldown = 30 * 1000;
+    if (/HTTP (?:3\d\d|404|410)|API (?:404|410)/.test(message)) cooldown = 30 * 60 * 1000;
+    else if (/timed? out|timeout|TLS|SSL|network|连接|主机/i.test(message)) cooldown = 2 * 60 * 1000;
+    else if (/HTTP (?:401|403)|API (?:401|403)/.test(message)) cooldown = 60 * 1000;
+    apiDomainCooldowns[host] = Date.now() + cooldown;
     if (storage.get('active_api_domain') === host) storage.set('active_api_domain', '');
   }
 
@@ -85,22 +105,36 @@
 
   function refreshDomains() {
     var key = crypto.md5(DOMAIN_SERVER_SECRET);
+    function decodedDomains(response) {
+      if (!response || response.error || Number(response.status) < 200 || Number(response.status) >= 300) return [];
+      try {
+        var decoded = crypto.aes256ECBDecryptBase64(String(response.body || '').trim(), key);
+        var payload = JSON.parse(decoded);
+        return unique((payload.Setting || []).concat(payload.Server || []));
+      } catch (_) {
+        return [];
+      }
+    }
+    if (typeof requestFirst === 'function') {
+      var winner = requestFirst(DOMAIN_SERVERS.map(function (url) {
+        return { url: url, method: 'GET', timeout: 4, cachePolicy: 'reloadIgnoringLocalCacheData' };
+      })) || {};
+      var winnerDomains = decodedDomains(winner);
+      if (winnerDomains.length) {
+        storage.set('api_domains', JSON.stringify(winnerDomains));
+        return winnerDomains;
+      }
+    }
     if (typeof requestAll === 'function') {
       var responses = requestAll(DOMAIN_SERVERS.map(function (url) {
         return { url: url, method: 'GET', timeout: 4, cachePolicy: 'reloadIgnoringLocalCacheData' };
       })) || [];
       for (var responseIndex = 0; responseIndex < responses.length; responseIndex++) {
-        try {
-          var candidate = responses[responseIndex];
-          if (!candidate || candidate.error || Number(candidate.status) < 200 || Number(candidate.status) >= 300) continue;
-          var concurrentDecoded = crypto.aes256ECBDecryptBase64(String(candidate.body || '').trim(), key);
-          var concurrentPayload = JSON.parse(concurrentDecoded);
-          var concurrentDomains = unique((concurrentPayload.Setting || []).concat(concurrentPayload.Server || []));
-          if (concurrentDomains.length) {
-            storage.set('api_domains', JSON.stringify(concurrentDomains));
-            return concurrentDomains;
-          }
-        } catch (_) {}
+        var concurrentDomains = decodedDomains(responses[responseIndex]);
+        if (concurrentDomains.length) {
+          storage.set('api_domains', JSON.stringify(concurrentDomains));
+          return concurrentDomains;
+        }
       }
       return [];
     }
@@ -138,7 +172,7 @@
     return JSON.parse(crypto.aes256ECBDecryptBase64(String(encoded), key));
   }
 
-  function requestOnce(host, path, method, fields, tokenSecret, tokenVersion, timeoutSeconds) {
+  function requestOnce(host, path, method, fields, tokenSecret, tokenVersion, timeoutSeconds, reload) {
     var ts = timestamp();
     var headers = {
       'Accept': 'application/json, text/plain, */*',
@@ -148,6 +182,7 @@
       'tokenparam': ts + ',' + (tokenVersion || '')
     };
     var options = { method: method, headers: headers, timeout: Number(timeoutSeconds || 6) };
+    if (reload) options.cachePolicy = 'reloadIgnoringLocalCacheData';
     if (method === 'POST') {
       headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=utf-8';
       options.body = encodeForm(fields || {});
@@ -158,7 +193,8 @@
     }
     var outer = JSON.parse(response.body || '{}');
     if (Number(outer.code) !== 200) {
-      throw new Error(String(outer.message || outer.msg || 'API ' + outer.code));
+      throw new Error('API ' + String(outer.code || 'error') + ': '
+        + String(outer.message || outer.msg || '请求被拒绝'));
     }
     var payload = decodedPayload(outer, ts);
     if (payload && payload.error) throw new Error(String(payload.error));
@@ -171,6 +207,7 @@
     var domains = usableDomains(prioritizeDomain(savedDomains(), storage.get('active_api_domain')));
     var lastError = null;
     var activeDomain = storage.get('active_api_domain');
+    if (domains.indexOf(activeDomain) < 0) activeDomain = null;
 
     // On a cold start (or after the remembered host dies), probing old JM API
     // mirrors one-by-one turns a six-second timeout into a minute. The native
@@ -195,6 +232,7 @@
           method: 'GET',
           headers: headers,
           timeout: 4,
+          cachePolicy: 'reloadIgnoringLocalCacheData',
           requiresJSON: true
         };
       });
@@ -233,7 +271,13 @@
       // cap it at three seconds instead of waiting on every historical mirror.
       var boundedList = list.slice(0, 4);
       var responses = requestAll(boundedList.map(function (host) {
-        return { url: 'https://' + host + path, method: 'GET', headers: headers, timeout: 3 };
+        return {
+          url: 'https://' + host + path,
+          method: 'GET',
+          headers: headers,
+          timeout: 3,
+          cachePolicy: 'reloadIgnoringLocalCacheData'
+        };
       })) || [];
       for (var responseIndex = 0; responseIndex < responses.length; responseIndex++) {
         try {
@@ -271,11 +315,16 @@
     }
     var result = null;
     if (method === 'GET' && (typeof requestFirst === 'function' || typeof requestAll === 'function')) {
-      // The remembered mirror participates in the same race. Giving it a
-      // serial "fast chance" still imposed a two-second penalty whenever that
-      // once-good host migrated or became half-open—the exact remaining
-      // fast/slow variance users observed after the first optimization pass.
-      result = concurrentGET(domains);
+      // Once a mirror has returned a fully decoded API response, keep the rest
+      // of this runtime on that replica. Re-racing every homepage section was
+      // expensive and could select a faster 2xx JSON error before a healthy
+      // encrypted response. A failed remembered host is immediately cleared
+      // and cooled down, so only one request pays this bounded fast chance.
+      if (activeDomain) result = attempt([activeDomain], 3);
+      if (!result) {
+        var raceDomains = domains.filter(function (host) { return host !== activeDomain; });
+        result = concurrentGET(raceDomains.length ? raceDomains : domains);
+      }
     } else {
       // Favorite/like/tracking are toggle endpoints, so racing or blindly
       // retrying after a timeout can apply the action twice and undo it. Use
@@ -285,7 +334,10 @@
       var mutationHost = activeDomain || domains[0];
       result = mutationHost ? attempt([mutationHost], 5) : null;
       var mutationError = String(lastError && lastError.message ? lastError.message : lastError || '');
-      if (!result && /HTTP (?:3\d\d|404)/.test(mutationError)) {
+      // These responses definitively reject the request before the toggle is
+      // applied, so one different proven candidate is safe. Timeouts and
+      // transport errors stay ambiguous and are never retried.
+      if (!result && /(?:HTTP|API) (?:3\d\d|401|403|404|410)/.test(mutationError)) {
         var alternative = domains.filter(function (host) { return host !== mutationHost; })[0];
         if (alternative) result = attempt([alternative], 5);
       }
@@ -315,12 +367,40 @@
     return data;
   }
 
+  function apiGetFresh(path) {
+    delete apiGETCache[path];
+    return apiGet(path);
+  }
+
+  function apiGetFreshFromActive(path) {
+    delete apiGETCache[path];
+    var loginHost = accountLoginHost();
+    if (!loginHost) throw new Error('请先在账号页完成禁漫天堂移动 API 登录');
+    try {
+      var result = requestOnce(
+        loginHost, path, 'GET', null, API_TOKEN_SECRET, '', 3, true
+      );
+      storage.set('account_api_domain', result.host);
+      return result.data;
+    } catch (error) {
+      markDomainFailure(loginHost, error);
+      storage.set('account_api_domain', '');
+      throw new Error(
+        '禁漫天堂账号绑定线路暂时不可用（' + loginHost + '）：'
+          + String(error && error.message ? error.message : error)
+          + '。请勿重复点击；若持续失败，请在账号页重新进行移动 API 登录'
+      );
+    }
+  }
+
   // The native bridge executes these signed requests concurrently. This keeps
   // comprehensive comment aggregation practical for long-running series while
   // preserving the same response validation/decryption as apiGet.
-  function apiGetBatch(paths) {
+  function apiGetBatch(paths, fallbackMissing, timeoutSeconds) {
     paths = Array.isArray(paths) ? paths : [];
     if (!paths.length) return [];
+    fallbackMissing = fallbackMissing !== false;
+    timeoutSeconds = Math.max(3, Number(timeoutSeconds || 12));
     if (typeof requestAll !== 'function') {
       return paths.map(function (path) {
         try { return apiGet(path); } catch (_) { return null; }
@@ -343,7 +423,7 @@
           url: 'https://' + host + path,
           method: 'GET',
           headers: headers,
-          timeout: 12
+          timeout: timeoutSeconds
         };
       })) || [];
       var decoded = responses.map(function (response) {
@@ -361,18 +441,50 @@
         markDomainSuccess(host);
         return decoded.map(function (value, index) {
           if (value !== null) return value;
+          if (!fallbackMissing) return null;
           try { return apiGet(paths[index]); } catch (_) { return null; }
         });
       }
       markDomainFailure(host, new Error('API batch failed'));
     }
+    if (!fallbackMissing) return paths.map(function () { return null; });
     return paths.map(function (path) {
       try { return apiGet(path); } catch (_) { return null; }
     });
   }
 
   function apiPost(path, fields) {
-    return apiRequest(path, 'POST', fields, API_TOKEN_SECRET, appVersion()).data;
+    ensureSetting(false);
+    var versionBefore = appVersion();
+    function postWithVersion(version) {
+      var host = accountLoginHost();
+      if (!host) throw new Error('请先在账号页完成禁漫天堂移动 API 登录');
+      return requestOnce(host, path, 'POST', fields, API_TOKEN_SECRET, version, 5, true).data;
+    }
+    try {
+      return postWithVersion(versionBefore);
+    } catch (error) {
+      var message = String(error && error.message ? error.message : error || '');
+      if (!/(?:HTTP|API) (?:401|403)/.test(message)) throw error;
+
+      // A definite authentication rejection cannot have applied a toggle.
+      // Refresh the signed client version and retry only when the server has
+      // actually announced a different version. Ambiguous transport failures
+      // never enter this path and therefore remain single-write operations.
+      ensureSetting(true);
+      var refreshedVersion = appVersion();
+      if (refreshedVersion === versionBefore) throw error;
+      return postWithVersion(refreshedVersion);
+    }
+  }
+
+  function accountLoginHost() {
+    var host = String(storage.get('account_api_login_host') || '').trim().toLowerCase();
+    return /^[a-z0-9.-]+$/.test(host) ? host : '';
+  }
+
+  function hasWebsiteSession() {
+    return storage.get('account_web_session_ready') === '1';
   }
 
   function signedPlainGet(path, tokenSecret) {
@@ -407,6 +519,17 @@
     return runtimeAppVersion || storage.get('app_version') || DEFAULT_APP_VERSION;
   }
 
+  function compareAppVersion(lhs, rhs) {
+    var left = String(lhs || '').split('.').map(function (part) { return Number(part) || 0; });
+    var right = String(rhs || '').split('.').map(function (part) { return Number(part) || 0; });
+    for (var index = 0; index < Math.max(left.length, right.length); index++) {
+      var a = left[index] || 0;
+      var b = right[index] || 0;
+      if (a !== b) return a > b ? 1 : -1;
+    }
+    return 0;
+  }
+
   function allowedDynamicImageHost(raw) {
     var value = String(raw || '').trim().replace(/\/$/, '');
     var match = value.match(/^https:\/\/([^/]+)$/i);
@@ -422,29 +545,44 @@
     return null;
   }
 
-  function ensureSetting() {
-    if (settingLoaded) return;
-    settingLoaded = true;
+  function ensureSetting(forceRefresh) {
+    if (settingLoaded && !forceRefresh) return;
     var savedImageHost = allowedDynamicImageHost(storage.get('image_host'));
     runtimeImageHost = savedImageHost || FALLBACK_IMAGE_HOST;
-    runtimeAppVersion = storage.get('app_version') || DEFAULT_APP_VERSION;
-    // Existing installations already have the most recently working image
-    // host. Do not put another API request in front of every cover and reader
-    // image during normal navigation. A fresh install still performs the
-    // setting lookup once so it can discover the current CDN.
-    if (savedImageHost) return;
+    var savedVersion = storage.get('app_version') || '';
+    runtimeAppVersion = compareAppVersion(savedVersion, DEFAULT_APP_VERSION) >= 0
+      ? savedVersion
+      : DEFAULT_APP_VERSION;
+    storage.set('app_version', runtimeAppVersion);
+    var checkedAt = Number(storage.get('setting_checked_at') || 0);
+    var isFresh = checkedAt > 0 && Date.now() - checkedAt <= SETTING_MAX_AGE_MS;
+    // Existing installations keep using their last good values immediately.
+    // Refresh at most once per six hours so POST token signatures do not stay
+    // pinned to an obsolete app version after the API rotates it.
+    if (!forceRefresh && savedImageHost && isFresh) {
+      settingLoaded = true;
+      return;
+    }
     try {
-      var setting = apiGet('/setting') || {};
+      var setting = apiGetFresh('/setting') || {};
       var imageHost = allowedDynamicImageHost(setting.img_host);
       if (imageHost) {
         runtimeImageHost = imageHost;
         storage.set('image_host', imageHost);
       }
-      if (setting.jm3_version) {
+      if (setting.jm3_version
+          && compareAppVersion(String(setting.jm3_version), runtimeAppVersion) > 0) {
         runtimeAppVersion = String(setting.jm3_version);
         storage.set('app_version', runtimeAppVersion);
       }
-    } catch (_) {}
+      storage.set('setting_checked_at', String(Date.now()));
+      settingLoaded = true;
+    } catch (_) {
+      // Keep the current bundled/saved values, but let the next operation try
+      // settings again instead of pinning a cold-start failure for the entire
+      // source runtime.
+      settingLoaded = false;
+    }
   }
 
   function imageHost() {
@@ -480,18 +618,20 @@
     return websiteURL(value);
   }
 
-  function websiteGet(path, timeoutSeconds) {
+  function websiteGet(path, timeoutSeconds, forceFresh) {
     var url = websiteURL(path);
     if (!url) throw new Error('禁漫天堂网页地址不受信任');
+    if (forceFresh) delete websiteHTMLCache[url];
     if (websiteHTMLCache[url]) return websiteHTMLCache[url];
     var response = fetch(url, {
       headers: {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'zh-CN,zh;q=0.9',
         'Referer': WEBSITE_BASE + '/',
-        'User-Agent': API_UA
+        'User-Agent': WEBSITE_UA
       },
-      timeout: Math.max(2, Number(timeoutSeconds || 15))
+      timeout: Math.max(2, Number(timeoutSeconds || 15)),
+      cachePolicy: forceFresh ? 'reloadIgnoringLocalCacheData' : undefined
     });
     if (response.status < 200 || response.status >= 300 || !String(response.body || '').trim()) {
       throw new Error('禁漫天堂网页内容暂时不可用（HTTP ' + response.status + '）');
@@ -500,7 +640,7 @@
     return websiteHTMLCache[url];
   }
 
-  function websitePost(path, fields, refererPath) {
+  function websitePostRaw(path, fields, refererPath, timeoutSeconds) {
     var url = websiteURL(path);
     if (!url) throw new Error('禁漫天堂网页地址不受信任');
     var referer = websiteURL(refererPath || '/');
@@ -512,17 +652,29 @@
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'Origin': WEBSITE_BASE,
         'Referer': referer || (WEBSITE_BASE + '/'),
-        'User-Agent': API_UA,
+        'User-Agent': WEBSITE_UA,
         'X-Requested-With': 'XMLHttpRequest'
       },
       body: encodeForm(fields || {}),
-      timeout: 15
+      timeout: Math.max(2, Number(timeoutSeconds || 15)),
+      cachePolicy: 'reloadIgnoringLocalCacheData'
     });
     if (response.status < 200 || response.status >= 300) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('禁漫天堂网页会话尚未通过验证；请在账号页完成一次“网页登录”后再试');
+      }
       throw new Error('禁漫天堂网页操作暂时不可用（HTTP ' + response.status + '）');
     }
     var body = String(response.body || '').trim();
     if (!body) throw new Error('官网没有返回操作结果');
+    if (/login|登入|登录/i.test(body) && /<html|<form|window\.location/i.test(body)) {
+      throw new Error('禁漫天堂官网登录状态已失效，请在账号页重新完成官网授权');
+    }
+    return body;
+  }
+
+  function websitePost(path, fields, refererPath, timeoutSeconds) {
+    var body = websitePostRaw(path, fields, refererPath, timeoutSeconds);
     try {
       return JSON.parse(body);
     } catch (_) {
@@ -531,9 +683,9 @@
     }
   }
 
-  function websiteDocument(path, timeoutSeconds) {
+  function websiteDocument(path, timeoutSeconds, forceFresh) {
     var url = websiteURL(path);
-    return parseHTML(websiteGet(path, timeoutSeconds), url || WEBSITE_BASE);
+    return parseHTML(websiteGet(path, timeoutSeconds, forceFresh), url || WEBSITE_BASE);
   }
 
   function webImageURL(element) {
@@ -1629,6 +1781,13 @@
 
   var interactionCache = {};
   var favoriteCache = {};
+  var mobileAlbumStateCache = {};
+  var mobileTrackingStateCache = {};
+  var websiteAlbumStateCache = {};
+  var favoriteFolderCache = null;
+  var favoriteFolderCacheReadAt = 0;
+  var MOBILE_STATE_MAX_AGE_MS = 750;
+  var FAVORITE_FOLDER_MAX_AGE_MS = 60000;
 
   function isEnabledValue(value) {
     if (value === true || value === 1) return true;
@@ -1636,13 +1795,74 @@
     return text === '1' || text === 'true' || text === 'yes' || text === 'on';
   }
 
-  function albumInteraction(id) {
-    var detail = apiGet('/album?id=' + encodeURIComponent(id)) || {};
-    return {
+  function inlineStyleColor(element) {
+    if (!element) return '';
+    var style = String(element.attr('style') || '');
+    var declarations = style.split(';');
+    for (var i = 0; i < declarations.length; i++) {
+      var parts = declarations[i].split(':');
+      if (parts.length >= 2 && String(parts.shift()).trim().toLowerCase() === 'color') {
+        return parts.join(':').trim().toLowerCase().replace(/\s+/g, '');
+      }
+    }
+    return '';
+  }
+
+  function websiteAlbumInteraction(id, forceFresh) {
+    id = albumID(id);
+    if (!hasWebsiteSession()) {
+      throw new Error('请先在账号页完成禁漫天堂官网授权');
+    }
+    var cached = websiteAlbumStateCache[id];
+    if (!forceFresh && cached && Date.now() - cached.readAt <= MOBILE_STATE_MAX_AGE_MS) {
+      return cached.value;
+    }
+    var doc = websiteDocument('/album/' + encodeURIComponent(id) + '/', 8, true);
+    var favoriteElement = doc.selectFirst('#favorite_album_' + id);
+    var likeElement = doc.selectFirst('#love_likes_' + id);
+    if (!favoriteElement && !likeElement) {
+      throw new Error('官网没有返回该画廊的账号状态，请重新完成官网授权后再试');
+    }
+    var favoriteIcon = favoriteElement ? favoriteElement.selectFirst('i') : null;
+    var likeIcon = likeElement ? likeElement.selectFirst('i') : null;
+    var favoriteColor = inlineStyleColor(favoriteIcon);
+    var likeColor = inlineStyleColor(likeIcon);
+    var isFavorited = !!favoriteIcon
+      && ['#000000', '#000', 'black', 'rgb(0,0,0)', 'rgba(0,0,0,1)'].indexOf(favoriteColor) < 0;
+    var isLiked = !!likeIcon
+      && ['red', '#ff0000', '#f00', 'rgb(255,0,0)', 'rgba(255,0,0,1)'].indexOf(likeColor) >= 0;
+    var value = {
+      isFavorited: isFavorited,
+      isLiked: isLiked,
+      likeCount: null,
+      category: null
+    };
+    websiteAlbumStateCache[id] = { readAt: Date.now(), value: value };
+    return value;
+  }
+
+  function albumInteraction(id, forceFresh) {
+    id = albumID(id);
+    var cached = mobileAlbumStateCache[id];
+    if (!forceFresh && cached && Date.now() - cached.readAt <= MOBILE_STATE_MAX_AGE_MS) {
+      return cached.value;
+    }
+    // Account-owned flags must stay on one authenticated backend replica.
+    // Racing generic content mirrors here made an existing favorite/like
+    // randomly disappear whenever a faster but stale replica won.
+    var detail = apiGetFreshFromActive('/album?id=' + encodeURIComponent(id)) || {};
+    var rawCategory = detail.favorite_folder_id;
+    if (rawCategory === undefined || rawCategory === null) rawCategory = detail.folder_id;
+    if (rawCategory === undefined || rawCategory === null) rawCategory = detail.fid;
+    var category = Number(rawCategory);
+    var value = {
       isLiked: isEnabledValue(detail.liked),
       likeCount: detail.likes === undefined ? null : String(detail.likes),
-      isFavorited: isEnabledValue(detail.is_favorite)
+      isFavorited: isEnabledValue(detail.is_favorite),
+      category: isFinite(category) ? Math.floor(category) : null
     };
+    mobileAlbumStateCache[id] = { readAt: Date.now(), value: value };
+    return value;
   }
 
   function articleInteraction(id) {
@@ -1664,40 +1884,51 @@
     return latest;
   }
 
-  function confirmAlbumInteraction(id, predicate) {
-    var latest = null;
-    for (var attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0) sleep(180);
-      latest = albumInteraction(id);
-      if (predicate(latest)) break;
+  function trackingInteraction(id, forceFresh) {
+    id = albumID(id);
+    var cached = mobileTrackingStateCache[id];
+    if (!forceFresh && cached && Date.now() - cached.readAt <= MOBILE_STATE_MAX_AGE_MS) {
+      return cached.value;
     }
-    return latest;
-  }
-
-  function trackingInteraction(id) {
-    var tracking = apiGet('/album_sertracking?id=' + encodeURIComponent(id));
-    if (isEnabledValue(tracking)) return true;
+    var path = '/album_sertracking?id=' + encodeURIComponent(id);
+    var tracking = apiGetFreshFromActive(path);
+    var value = isEnabledValue(tracking);
     tracking = tracking || {};
-    return isEnabledValue(tracking.is_tracking)
+    value = value || isEnabledValue(tracking.is_tracking)
       || isEnabledValue(tracking.is_tracked)
       || isEnabledValue(tracking.tracked)
       || isEnabledValue(tracking.status);
+    mobileTrackingStateCache[id] = { readAt: Date.now(), value: value };
+    return value;
   }
 
-  function confirmTrackingInteraction(id, desired) {
-    var latest = false;
+  function trackingListContains(id) {
+    id = albumID(id);
+    // The official mobile protocol exposes the synchronized tracking shelf as
+    // a POST-backed read endpoint. A newly enabled item should be present on
+    // its first page; checking it prevents the detail-status endpoint alone
+    // from creating a success message while the account shelf is unchanged.
+    var payload = apiPost('/album_tracking', { page: '1' }) || {};
+    var items = Array.isArray(payload.item)
+      ? payload.item
+      : (Array.isArray(payload.list) ? payload.list : []);
+    return items.some(function (item) {
+      var candidate = item && (item.id || item.ID || item.AID || item.album_id);
+      return candidate !== undefined && candidate !== null
+        && albumID(candidate) === id;
+    });
+  }
+
+  function confirmTrackingShelf(id, desired) {
+    var lastValue = false;
     for (var attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0) sleep(180);
-      latest = trackingInteraction(id);
-      if (latest === desired) break;
+      if (attempt > 0) sleep(260);
+      lastValue = trackingListContains(id);
+      if (lastValue === !!desired) return true;
     }
-    return latest;
-  }
-
-  function hasBusinessStatus(payload, expected) {
-    if (!payload || typeof payload !== 'object') return false;
-    var status = String(payload.status === undefined ? '' : payload.status).toLowerCase();
-    return (expected || []).some(function (value) { return status === value; });
+    throw new Error(desired
+      ? '移动 API 状态已更新，但追踪列表尚未确认这本画廊；未报告成功，请稍后重试'
+      : '移动 API 状态已更新，但追踪列表尚未确认移除这本画廊；未报告成功，请稍后重试');
   }
 
   function adjustedCount(value, delta) {
@@ -1705,6 +1936,190 @@
     var numeric = Number(text.replace(/,/g, ''));
     if (!isFinite(numeric)) return value;
     return String(Math.max(0, Math.floor(numeric + delta)));
+  }
+
+  function favoriteFolders(forceFresh) {
+    if (!forceFresh && favoriteFolderCache
+        && Date.now() - favoriteFolderCacheReadAt <= FAVORITE_FOLDER_MAX_AGE_MS) {
+      return favoriteFolderCache;
+    }
+    try {
+      var data = apiGetFreshFromActive('/favorite?page=1&folder_id=0&o=mr');
+      return captureFavoriteFolders(data);
+    } catch (_) {
+      // Folder discovery is an enhancement. Default-folder favorite remains
+      // available even if the list endpoint is temporarily slow.
+    }
+    return fastFavoriteFolders();
+  }
+
+  function captureFavoriteFolders(data) {
+    if (!data || !Array.isArray(data.folder_list)) return fastFavoriteFolders();
+    var folders = [{ id: 0, name: '全部' }];
+    (data && data.folder_list || []).forEach(function (folder) {
+      var rawID = folder && (folder.FID !== undefined ? folder.FID : folder.id);
+      var id = Number(rawID);
+      var name = String(folder && (folder.name || folder.title) || '').trim();
+      if (!isFinite(id) || id < 0 || !name) return;
+      if (folders.some(function (item) { return item.id === Math.floor(id); })) return;
+      folders.push({ id: Math.floor(id), name: name });
+    });
+    favoriteFolderCache = folders;
+    favoriteFolderCacheReadAt = Date.now();
+    storage.set('favorite_folder_cache_json', JSON.stringify(folders));
+    return folders;
+  }
+
+  function fastFavoriteFolders() {
+    if (favoriteFolderCache && favoriteFolderCache.length) return favoriteFolderCache;
+    try {
+      var persisted = JSON.parse(storage.get('favorite_folder_cache_json') || '[]');
+      if (Array.isArray(persisted) && persisted.length) {
+        favoriteFolderCache = persisted.filter(function (folder) {
+          return folder && isFinite(Number(folder.id)) && String(folder.name || '').trim();
+        }).map(function (folder) {
+          return { id: Math.floor(Number(folder.id)), name: String(folder.name).trim() };
+        });
+      }
+    } catch (_) {}
+    return favoriteFolderCache && favoriteFolderCache.length
+      ? favoriteFolderCache
+      : [{ id: 0, name: '全部' }];
+  }
+
+  function clearMobileAlbumCaches(id) {
+    id = albumID(id);
+    delete interactionCache[id];
+    delete favoriteCache[id];
+    delete mobileAlbumStateCache[id];
+    delete mobileTrackingStateCache[id];
+    delete apiGETCache['/album?id=' + encodeURIComponent(id)];
+  }
+
+  function clearWebsiteAlbumCaches(id) {
+    id = albumID(id);
+    delete websiteAlbumStateCache[id];
+    delete websiteHTMLCache[websiteURL('/album/' + encodeURIComponent(id) + '/')];
+  }
+
+  function confirmWebsiteValue(id, key, desired) {
+    var latest = null;
+    var lastError = null;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) sleep(220);
+      try {
+        latest = websiteAlbumInteraction(id, true);
+        if (latest[key] === desired) return latest;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!latest && lastError) throw lastError;
+    return latest;
+  }
+
+  function mutateWebsiteValue(id, key, desired, write, failureMessage) {
+    id = albumID(id);
+    var before = websiteAlbumInteraction(id, false);
+    if (before[key] === desired) return before;
+    var writeError = null;
+    try {
+      write(before);
+    } catch (error) {
+      // Website mutations are also ambiguous on timeout. Never submit the
+      // same toggle twice; an immediate fresh detail read decides success.
+      writeError = error;
+    }
+    clearWebsiteAlbumCaches(id);
+    clearMobileAlbumCaches(id);
+    var confirmed = null;
+    var confirmationError = null;
+    try { confirmed = confirmWebsiteValue(id, key, desired); }
+    catch (error) { confirmationError = error; }
+    if (confirmed && confirmed[key] === desired) return confirmed;
+    if (writeError) throw writeError;
+    if (confirmationError) {
+      throw new Error('官网操作已响应，但无法回读确认实际状态：' + confirmationError.message);
+    }
+    throw new Error(failureMessage);
+  }
+
+  function confirmMobileValue(id, key, desired, read) {
+    var latest = null;
+    var lastError = null;
+    // One same-replica, cache-bypassing read is authoritative. The previous
+    // two-read loop doubled every tap's visible latency and still could not fix
+    // cross-replica drift.
+    sleep(120);
+    try {
+      latest = read(true);
+      if (latest[key] === desired) return latest;
+    } catch (error) {
+      lastError = error;
+    }
+    if (!latest && lastError) throw lastError;
+    return latest;
+  }
+
+  function mutationMessage(payload, fallback) {
+    return String(payload && (payload.msg || payload.message) || fallback);
+  }
+
+  function mobileMutationRejected(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    if (payload.error) return true;
+    var status = String(payload.status === undefined ? '' : payload.status).toLowerCase();
+    return ['0', 'false', 'fail', 'failed', 'error', 'rejected'].indexOf(status) >= 0;
+  }
+
+  function mutateMobileValue(
+    id, key, desired, read, write, failureMessage, verifyAfterWrite, knownBefore
+  ) {
+    id = albumID(id);
+    // Reuse the state that already painted this detail view. Fresh page state
+    // avoids another network round-trip, while a cold action still performs an
+    // authoritative pre-read so a toggle cannot accidentally reverse itself.
+    var before = knownBefore || read(false);
+    if (before[key] === desired) return before;
+
+    var writeError = null;
+    var writeSucceeded = false;
+    try {
+      var result = write(before);
+      if (mobileMutationRejected(result)) throw new Error(mutationMessage(result, failureMessage));
+      writeSucceeded = true;
+    } catch (error) {
+      // A timeout is ambiguous: never retry a mutation that may already have
+      // reached the server. The mobile API readback below is authoritative.
+      writeError = error;
+    }
+
+    clearMobileAlbumCaches(id);
+    if (writeSucceeded && verifyAfterWrite === false) {
+      before[key] = desired;
+      return before;
+    }
+
+    var confirmed = null;
+    var confirmationError = null;
+    try {
+      confirmed = confirmMobileValue(id, key, desired, read);
+    } catch (error) {
+      confirmationError = error;
+    }
+    if (confirmed && confirmed[key] === desired) return confirmed;
+    clearMobileAlbumCaches(id);
+    if (writeError) {
+      var message = String(writeError && writeError.message ? writeError.message : writeError);
+      if (/(?:HTTP|API) (?:401|403)/.test(message)) {
+        throw new Error('禁漫天堂当前账号会话未通过移动 API 验证；请使用 2.1.4 多线路登录重新建立会话');
+      }
+      throw writeError;
+    }
+    if (confirmationError) {
+      throw new Error('移动 API 已响应，但无法回读确认实际状态：' + confirmationError.message);
+    }
+    throw new Error(failureMessage);
   }
 
   function interactionState(manga) {
@@ -1731,17 +2146,20 @@
       };
     }
     var id = albumID(manga.id || manga.url);
-    if (interactionCache[id]) return interactionCache[id];
-    var info = manga.info || {};
-    var album = {
-      isLiked: isEnabledValue(info.isLiked),
-      likeCount: info.likes === undefined ? null : String(info.likes),
-      isFavorited: isEnabledValue(info.isFavorited)
-    };
-    var tracked = false;
-    try {
-      tracked = trackingInteraction(id);
-    } catch (_) {}
+    var album = { isLiked: false, likeCount: null, isFavorited: false, category: null };
+    // iOS executes official-site favorite/like reads in the native WebKit
+    // website broker. Keep this plugin call on the mobile account replica so
+    // tracking remains independent from website anti-bot latency.
+    if (accountLoginHost()) {
+      try { album = albumInteraction(id, false); } catch (_) {}
+    }
+    // Like and tracking are independent server capabilities. A temporarily
+    // unavailable tracking-state endpoint must not disable or misreport the
+    // like button; an explicit tracking tap performs its own strict pre-read.
+    var tracked = interactionCache[id] ? interactionCache[id].isTracked : false;
+    if (accountLoginHost()) {
+      try { tracked = trackingInteraction(id, false); } catch (_) {}
+    }
     var state = {
       isSupported: true,
       // JM's like endpoint is one-way. Once liked, neither the website nor
@@ -1749,7 +2167,7 @@
       canLike: !album.isLiked,
       isLiked: album.isLiked,
       likeCount: album.likeCount,
-      canTrack: true,
+      canTrack: !!accountLoginHost(),
       isTracked: tracked,
       message: null
     };
@@ -2080,13 +2498,21 @@
 
   function favoriteState(manga) {
     var id = albumID(manga.id || manga.url);
-    var info = manga.info || {};
-    var cached = favoriteCache[id];
+    var snapshot = { isFavorited: false, category: null };
+    if (hasWebsiteSession()) {
+      try { snapshot = websiteAlbumInteraction(id, false); } catch (_) {
+        if (accountLoginHost()) {
+          try { snapshot = albumInteraction(id, false); } catch (_) {}
+        }
+      }
+    } else if (accountLoginHost()) {
+      try { snapshot = albumInteraction(id, false); } catch (_) {}
+    }
     var state = {
       isSupported: true,
-      isFavorited: cached ? cached.isFavorited : isEnabledValue(info.isFavorited),
-      category: null,
-      categories: [],
+      isFavorited: snapshot.isFavorited,
+      category: snapshot.category,
+      categories: fastFavoriteFolders(),
       note: null,
       message: null
     };
@@ -2094,23 +2520,42 @@
     return state;
   }
 
-  function setFavoriteValue(manga, desired) {
+  function setFavoriteValue(manga, desired, category) {
     var id = albumID(manga.id || manga.url);
-    var state = favoriteCache[id] || favoriteState(manga);
-    if (state.isFavorited !== desired) {
-      var result = apiPost('/favorite', { aid: id });
-      if (!hasBusinessStatus(result, ['ok'])) {
-        state.isSupported = false;
-        state.message = String((result && (result.msg || result.message))
-          || (desired ? '官网尚未确认收藏，请稍后重试' : '官网尚未确认取消收藏，请稍后重试'));
-        return state;
-      }
-      // `status: ok` is the official acknowledgement. A second album request
-      // used to add another network round-trip (twice when propagation lagged)
-      // and made a successful tap look like a timeout.
-      state.isFavorited = desired;
+    var selectedCategory = isFinite(Number(category)) ? Math.floor(Number(category)) : 0;
+    if (!hasWebsiteSession()) {
+      throw new Error('请先在账号页完成禁漫天堂官网授权，再同步收藏');
     }
-    state.message = desired ? '已加入禁漫天堂收藏' : '已从禁漫天堂收藏移除';
+    var snapshot = mutateWebsiteValue(
+      id,
+      'isFavorited',
+      !!desired,
+      function () {
+        if (desired) {
+          return websitePostRaw(
+            '/ajax/favorite_album',
+            { album_id: id, fid: selectedCategory },
+            '/album/' + id + '/',
+            8
+          );
+        }
+        return websitePostRaw(
+          '/ajax/delete_favorite_album',
+          { album_id: id },
+          '/album/' + id + '/',
+          8
+        );
+      },
+      desired ? '官网未确认收藏成功，请稍后重试' : '官网未确认取消收藏，请稍后重试'
+    );
+    var state = {
+      isSupported: true,
+      isFavorited: snapshot.isFavorited,
+      category: desired ? selectedCategory : snapshot.category,
+      categories: fastFavoriteFolders(),
+      note: null,
+      message: desired ? '已加入禁漫天堂收藏' : '已从禁漫天堂收藏移除'
+    };
     favoriteCache[id] = state;
     return state;
   }
@@ -2118,21 +2563,72 @@
   globalThis.__source = {
     getHome: function () {
       ensureSetting();
-      var promote = apiGet('/promote') || [];
+      // Homepage sections are independent. Load their API payloads together
+      // from one proven replica so a slow optional column cannot serialize or
+      // fail the entire landing page. Five seconds is a per-section ceiling;
+      // healthy current mirrors normally complete the whole batch in ~2 s.
+      var homePaths = [
+        '/promote',
+        '/creator_work?page=1&search_value=&lang=&source=',
+        '/categories/filter?page=1&order=&c=single&o=mr',
+        '/latest?page=1',
+        '/week',
+        '/blogs?page=1&blog_type=dinner',
+        '/blogs?page=1&blog_type=raiders',
+        '/blogs?page=1&blog_type=all',
+        '/blogs?page=2&blog_type=all',
+        '/blogs?page=3&blog_type=all'
+      ];
+      var homePayloads = apiGetBatch(homePaths, false, 5);
+      var promote = Array.isArray(homePayloads[0]) ? homePayloads[0] : [];
       var serial = findPromote(promote, '26') || { content: [] };
       var translation = findPromote(promote, '998') || { content: [] };
       var korean = findPromote(promote, '999') || { content: [] };
       var c108 = findPromote(promote, '29') || { content: [] };
       var uncensored = findPromote(promote, '30') || { content: [] };
       var novels = findPromote(promote, '1002') || { content: [] };
-      var libraryPage = creatorWorkPage(1);
-      var single = categoryPage(1, 'single', 'mr', 'a').items.slice(0, 10);
-      var latest = paged(apiGet('/latest?page=1') || [], 1, null, 80).items.slice(0, 10);
-      var week = apiGet('/week') || {};
+
+      var creatorPayload = homePayloads[1] || {};
+      if (creatorPayload.data && typeof creatorPayload.data === 'object') {
+        creatorPayload = creatorPayload.data;
+      }
+      var creatorItems = Array.isArray(creatorPayload.content) ? creatorPayload.content : [];
+      var libraryPage = {
+        items: creatorItems.map(function (item) { return mapEditorial(item, 'library'); }),
+        hasNextPage: 30 < Math.max(0, Number(creatorPayload.total || 0))
+      };
+      var singlePayload = homePayloads[2] || {};
+      var single = paged(singlePayload.content || [], 1, singlePayload.total, 80).items.slice(0, 10);
+      var latestPayload = Array.isArray(homePayloads[3]) ? homePayloads[3] : [];
+      var latest = paged(latestPayload, 1, null, 80).items.slice(0, 10);
+      var week = homePayloads[4] || {};
       var weekCategory = (week.categories || [])[0];
-      var weekly = weekCategory
-        ? mapAlbums((apiGet('/week/filter?id=' + encodeURIComponent(weekCategory.id)) || {}).list || [], 10)
-        : [];
+      var weekly = [];
+      if (weekCategory) {
+        try {
+          weekly = mapAlbums(
+            (apiGet('/week/filter?id=' + encodeURIComponent(weekCategory.id)) || {}).list || [],
+            10
+          );
+        } catch (_) {}
+      }
+
+      var dinnerPage = blogListResult(homePayloads[5], 'dinner', 1);
+      var raidersPage = blogListResult(homePayloads[6], 'raiders', 1);
+      var sexytalkRaw = [];
+      var sexytalkTotal = 0;
+      homePayloads.slice(7, 10).forEach(function (payload) {
+        if (!payload || typeof payload !== 'object') return;
+        sexytalkTotal = Math.max(sexytalkTotal, Number(payload.count || payload.total || 0));
+        (payload.list || []).forEach(function (item) {
+          if (blogChannel(item, '') === 'sexytalk') sexytalkRaw.push(item);
+        });
+      });
+      var sexytalkPage = {
+        items: sexytalkRaw.map(function (item) { return mapBlogEditorial(item, 'sexytalk'); }),
+        hasNextPage: 36 < sexytalkTotal
+      };
+
       var weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date().getDay()];
       var heroManga = mapAlbums(serial.content || [], 10);
       var sections = [
@@ -2145,26 +2641,43 @@
         sections.push({ id: 'week:' + weekCategory.id, title: '每周必看 · ' + String(weekCategory.time || ''), items: weekly });
       }
       var sectionStates = {
-        featured: { state: heroManga.length ? 'loaded' : 'empty', message: weekday + '连载更新' }
-      };
-      [
-        { id: 'dinner', title: '绅夜食堂' },
-        { id: 'raiders', title: '游戏文库' },
-        { id: 'sexytalk', title: '西斯话题' }
-      ].forEach(function (channel) {
-        var items = [];
-        var state = 'empty';
-        var message = null;
-        try {
-          items = editorialPage(channel.id, 1).items.slice(0, 10);
-          state = items.length ? 'loaded' : 'empty';
-        } catch (error) {
-          state = 'failed';
-          message = String(error && error.message ? error.message : error);
+        featured: {
+          state: homePayloads[0] === null ? 'failed' : (heroManga.length ? 'loaded' : 'empty'),
+          message: homePayloads[0] === null ? '推荐栏目暂时不可用' : weekday + '连载更新'
+        },
+        'hotCategory.jm_translation': {
+          state: homePayloads[0] === null ? 'failed' : ((translation.content || []).length ? 'loaded' : 'empty'),
+          message: homePayloads[0] === null ? '栏目线路暂时不可用' : null
+        },
+        'hotCategory.korean': {
+          state: homePayloads[0] === null ? 'failed' : ((korean.content || []).length ? 'loaded' : 'empty'),
+          message: homePayloads[0] === null ? '栏目线路暂时不可用' : null
+        },
+        'hotCategory.c108': {
+          state: homePayloads[0] === null ? 'failed' : ((c108.content || []).length ? 'loaded' : 'empty'),
+          message: homePayloads[0] === null ? '栏目线路暂时不可用' : null
+        },
+        'hotCategory.uncensored_color': {
+          state: homePayloads[0] === null ? 'failed' : ((uncensored.content || []).length ? 'loaded' : 'empty'),
+          message: homePayloads[0] === null ? '栏目线路暂时不可用' : null
         }
+      };
+
+      [
+        { id: 'dinner', title: '绅夜食堂', page: dinnerPage, payloadIndex: 5 },
+        { id: 'raiders', title: '游戏文库', page: raidersPage, payloadIndex: 6 },
+        { id: 'sexytalk', title: '西斯话题', page: sexytalkPage, payloadIndex: 7 }
+      ].forEach(function (channel) {
+        var items = channel.page.items.slice(0, 10);
+        var unavailable = channel.id === 'sexytalk'
+          ? homePayloads.slice(7, 10).every(function (payload) { return payload === null; })
+          : homePayloads[channel.payloadIndex] === null;
         var sectionID = 'community:' + channel.id;
         sections.push({ id: sectionID, title: channel.title, items: items });
-        sectionStates['hotCategory.' + sectionID] = { state: state, message: message };
+        sectionStates['hotCategory.' + sectionID] = {
+          state: unavailable ? 'failed' : (items.length ? 'loaded' : 'empty'),
+          message: unavailable ? '栏目线路暂时不可用' : null
+        };
       });
       if (libraryPage.items.length) {
         sections.push({
@@ -2180,12 +2693,28 @@
       }
       sections.push({ id: 'single', title: '单行本推荐', items: single });
       sections.push({ id: 'latest', title: '最新漫画', items: latest });
+      sectionStates['hotCategory.library'] = {
+        state: homePayloads[1] === null ? 'failed' : (libraryPage.items.length ? 'loaded' : 'empty'),
+        message: homePayloads[1] === null ? '栏目线路暂时不可用' : null
+      };
+      sectionStates['hotCategory.single'] = {
+        state: homePayloads[2] === null ? 'failed' : (single.length ? 'loaded' : 'empty'),
+        message: homePayloads[2] === null ? '栏目线路暂时不可用' : null
+      };
+      sectionStates['hotCategory.latest'] = {
+        state: homePayloads[3] === null ? 'failed' : (latest.length ? 'loaded' : 'empty'),
+        message: homePayloads[3] === null ? '栏目线路暂时不可用' : null
+      };
       return {
         heroes: heroManga.map(function (manga) { return { manga: manga, imageURL: manga.highResolutionCoverURL || manga.coverURL }; }),
         popular: [], toplist: [], editor: [], rising: [],
         hotCategories: sections,
         sectionStates: (function () {
-          sectionStates.hotCategories = { state: sections.length ? 'loaded' : 'empty', message: null };
+          var hasSectionContent = sections.some(function (section) { return section.items.length > 0; });
+          sectionStates.hotCategories = {
+            state: hasSectionContent ? 'loaded' : 'failed',
+            message: hasSectionContent ? null : '禁漫天堂当前数据线路暂时不可用'
+          };
           return sectionStates;
         })()
       };
@@ -2410,6 +2939,7 @@
         path += '&folder_id=' + encodeURIComponent(category);
       }
       var data = apiGet(path) || {};
+      captureFavoriteFolders(data);
       var items = mapAlbums(data.list || []);
       if (query) {
         var needle = String(query).toLowerCase();
@@ -2433,6 +2963,7 @@
       var favorites = {};
       var history = {};
       try { favorites = apiGet('/favorite?page=1') || {}; } catch (_) {}
+      captureFavoriteFolders(favorites);
       try { history = apiGet('/watch_list?page=1') || {}; } catch (_) {}
       var progressMetrics = [
         { id: 'title', title: '称号', value: profileValue(profile, ['title', 'level_name'], '—') },
@@ -2520,7 +3051,7 @@
     },
 
     getFavoriteState: function (manga) { return favoriteState(manga); },
-    setFavorite: function (manga) { return setFavoriteValue(manga, true); },
+    setFavorite: function (manga, category) { return setFavoriteValue(manga, true, category); },
     removeFavorite: function (manga) { return setFavoriteValue(manga, false); },
 
     getInteractionState: function (manga) { return interactionState(manga); },
@@ -2546,57 +3077,101 @@
       }
       if (kind && kind !== 'comic') return interactionState(manga);
       var id = albumID(manga.id || manga.url);
-      var state = interactionCache[id] || interactionState(manga);
       if (!desired) {
+        // Unlike does not exist. Trust the most recent displayed state so the
+        // rejection is immediate and never starts a network request merely to
+        // tell the user that the operation is unsupported.
+        var state = interactionCache[id] || interactionState(manga);
         state = {
           isSupported: !state.isLiked,
           canLike: !state.isLiked,
           isLiked: state.isLiked,
           likeCount: state.likeCount,
-          canTrack: true,
+          canTrack: !!accountLoginHost(),
           isTracked: state.isTracked,
           message: state.isLiked
-            ? '禁漫天堂的喜欢是单向操作，官网暂不支持取消喜欢'
+            ? '禁漫天堂的评价是单向操作，官网暂不支持撤回'
             : null
         };
         interactionCache[id] = state;
         return state;
       }
-      if (!state.isLiked) {
-        var result = apiPost('/like', { id: id });
-        if (!hasBusinessStatus(result, ['success'])) {
-          state.isSupported = false;
-          state.message = String((result && (result.msg || result.message)) || '官网尚未确认点赞，请稍后重试');
-          return state;
-        }
-        state.likeCount = adjustedCount(state.likeCount, 1);
+      if (!hasWebsiteSession()) {
+        throw new Error('请先在账号页完成禁漫天堂官网授权，再进行评价');
       }
-      state = {
+      var previousInteraction = interactionCache[id] || null;
+      var snapshot = mutateWebsiteValue(
+        id,
+        'isLiked',
+        true,
+        function () {
+          return websitePostRaw(
+            '/ajax/vote_album',
+            { album_id: id, vote: 'likes' },
+            '/album/' + id + '/',
+            8
+          );
+        },
+        '官网未确认评价成功，请稍后重试'
+      );
+      var tracked = previousInteraction
+        ? previousInteraction.isTracked
+        : false;
+      if (!previousInteraction) {
+        try { tracked = trackingInteraction(id, false); } catch (_) {}
+      }
+      var confirmedState = {
         isSupported: true,
         canLike: false,
         isLiked: true,
-        likeCount: state.likeCount,
-        canTrack: true,
-        isTracked: state.isTracked,
+        likeCount: snapshot.likeCount,
+        canTrack: !!accountLoginHost(),
+        isTracked: tracked,
         message: null
       };
-      interactionCache[id] = state;
-      state.message = '已喜欢这部漫画';
-      return state;
+      interactionCache[id] = confirmedState;
+      confirmedState.message = '评价成功';
+      return confirmedState;
     },
     setTracking: function (manga, desired) {
       var kind = manga && manga.info ? manga.info.contentKind : 'comic';
       if (kind && kind !== 'comic') return interactionState(manga);
+      if (!accountLoginHost()) {
+        throw new Error('请先在账号页完成禁漫天堂移动 API 登录，再同步连载追踪');
+      }
       var id = albumID(manga.id || manga.url);
-      var state = interactionCache[id] || interactionState(manga);
-      if (state.isTracked !== !!desired) apiPost('/album_sertracking', { id: albumID(manga.id || manga.url) });
-      state = {
+      var previousInteraction = interactionCache[id] || null;
+      var snapshot = mutateMobileValue(
+        id,
+        'isTracked',
+        !!desired,
+        function () {
+          // Never decide a toggle from the detail view's cached flag. A stale
+          // pre-read can reverse an already-correct server state.
+          return { isTracked: trackingInteraction(id, true) };
+        },
+        function () {
+          return apiPost('/album_sertracking', { id: id });
+        },
+        desired ? '移动 API 未确认开启连载追踪，请稍后重试' : '移动 API 未确认关闭连载追踪，请稍后重试',
+        true,
+        null
+      );
+      confirmTrackingShelf(id, !!desired);
+      var album = previousInteraction ? {
+        isLiked: previousInteraction.isLiked,
+        likeCount: previousInteraction.likeCount
+      } : {
+        isLiked: isEnabledValue((manga.info || {}).isLiked),
+        likeCount: (manga.info || {}).likes === undefined ? null : String((manga.info || {}).likes)
+      };
+      var state = {
         isSupported: true,
-        canLike: true,
-        isLiked: state.isLiked,
-        likeCount: state.likeCount,
+        canLike: !album.isLiked,
+        isLiked: album.isLiked,
+        likeCount: album.likeCount,
         canTrack: true,
-        isTracked: !!desired,
+        isTracked: snapshot.isTracked,
         message: null
       };
       interactionCache[id] = state;

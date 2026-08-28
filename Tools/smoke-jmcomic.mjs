@@ -144,6 +144,16 @@ assert.ok(homepageItems.every((item) => {
   return url.startsWith("/") || /^https:\/\/([^.]+\.)?18comic\.vip(?:\/|$)/i.test(url);
 }), "homepage contains an off-site content link");
 
+if (process.env.JM_HOMEPAGE_ONLY === "1") {
+  console.log(JSON.stringify({
+    ...timings,
+    heroCount: home.heroes.length,
+    sectionCount: home.hotCategories.length,
+    loadedSections: home.hotCategories.filter((section) => section.items.length > 0).length,
+  }, null, 2));
+  process.exit(0);
+}
+
 const fullListCounts = {};
 for (const sectionID of [
   "serialization", "jm_translation", "korean", "c108", "uncensored_color", "single", "latest",
@@ -280,7 +290,7 @@ assert.ok(details.recommendations.every((item) => String(item.id) !== String(det
 const interaction = source.getInteractionState(details);
 assert.equal(interaction.isSupported, true);
 assert.equal(interaction.canLike, !interaction.isLiked);
-assert.equal(interaction.canTrack, true);
+assert.equal(interaction.canTrack, false, "anonymous smoke state must not enable account tracking");
 
 // JM's official like endpoint is one-way. A caller asking to unlike an
 // already-liked album must not issue a write or report a fake synchronized

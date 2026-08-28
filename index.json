@@ -669,6 +669,8 @@
         "www.cdngwc.net",
         "www.cdngwc.club",
         "www.cdnhjk.cc",
+        "www.cdnhjk.net",
+        "www.cdnutc.me",
         "www.cdnaspa.vip",
         "www.cdnaspa.club",
         "www.cdnplaystation6.org",
@@ -683,8 +685,27 @@
         "*.bytepluses.com"
       ],
       "authentication" : {
+        "cookieCapture" : {
+          "domains" : [
+            "18comic.vip",
+            "*.18comic.vip"
+          ],
+          "names" : [
+            "AVS",
+            "cf_clearance"
+          ],
+          "requiredNames" : [
+            "AVS"
+          ]
+        },
         "formLogin" : {
           "encoding" : "urlEncoded",
+          "fallbackURLs" : [
+            "https://www.cdngwc.club/login",
+            "https://www.cdnhth.club/login",
+            "https://www.cdnhjk.cc/login",
+            "https://www.cdnutc.me/login"
+          ],
           "headers" : {
             "User-Agent" : "Mozilla/5.0 (Linux; Android 9; V1938CT Build/PQ3A.190705.11211812; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Safari/537.36"
           },
@@ -694,7 +715,7 @@
             "parameterHeader" : "tokenparam",
             "secretSuffix" : "18comicAPP",
             "tokenHeader" : "token",
-            "version" : "2.0.33"
+            "version" : "2.1.4"
           },
           "responseDecryption" : {
             "kind" : "aes256ECBBase64JSON",
@@ -702,9 +723,10 @@
             "secretSuffix" : "185Hcomic3PAPP7R"
           },
           "tokenJSONPath" : "s",
-          "url" : "https://www.cdnhth.club/login",
+          "url" : "https://www.cdnhjk.net/login",
           "usernameField" : "username"
         },
+        "persistentWebLogin" : true,
         "tokenAttachment" : {
           "hosts" : [
             "18comic.vip",
@@ -713,6 +735,8 @@
             "www.cdngwc.net",
             "www.cdngwc.club",
             "www.cdnhjk.cc",
+            "www.cdnhjk.net",
+            "www.cdnutc.me",
             "www.cdnaspa.vip",
             "www.cdnaspa.club",
             "www.cdnplaystation6.org",
@@ -729,7 +753,12 @@
           "kind" : "cookie",
           "name" : "AVS",
           "pathPrefix" : "/"
-        }
+        },
+        "webLoginHosts" : [
+          "challenges.cloudflare.com"
+        ],
+        "webLoginURL" : "https://18comic.vip/login",
+        "webUserAgent" : "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
       },
       "contentRating" : "adult",
       "fallbackBaseURL" : "https://18comic.vip",
@@ -809,14 +838,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
-      "sha256" : "da485e1b62b50c8a081a24c17381f85f0bdefbb47dc1397aeec6e7634a7d60a3",
+      "sha256" : "6475b64d25ac6a6c78d72b5b40ae1f36f30a4554cb85c36d3fe38cf752b2ab9f",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "OqvovPr2u+F6Kz9zEBCYsm6epHZaPN7S3snHvHq5LRG0jqezBpNGtRFyNQ8Q19FnMLQNp8kL0pZtEHvHO44HCg=="
+        "value" : "kII2KrbM8VgkJ/4H5OPmJK+okv19Zodaqvpsc+Ko9Ja/oJokBV5O++DxAnwIW6NOYQu82rzlUIL/BjYT0bLjDA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.4.10"
+      "version" : "1.4.19"
     }
   ]
 }

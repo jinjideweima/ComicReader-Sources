@@ -5,6 +5,40 @@ must update that source version, digest, and signature together.
 
 ## [Unreleased]
 
+- Upgrade JMComic to 1.4.19: keep initial interaction reads on the authenticated
+  mobile replica while iOS performs favorite and one-way rating through its
+  isolated same-session WebKit broker, avoiding the website-cookie replay path.
+- Upgrade JMComic to 1.4.18: require an independently verified official-site
+  session for website favorite and rating writes, keep its same-named AVS
+  separate from the mobile API token, and confirm tracking against both the
+  fresh status endpoint and the synchronized tracking shelf before reporting
+  success.
+- Upgrade JMComic to 1.4.17: race signed login endpoints before submitting
+  credentials, prioritize the current healthy API catalog, batch independent
+  homepage sections on one proven replica, and keep partial homepage content
+  visible when an optional section fails.
+- Upgrade JMComic to 1.4.16: split mobile-API and official-website sessions;
+  bind every authenticated API request to the host that issued its AVS;
+  perform favorite and one-way rating through the official website endpoints
+  with forced detail-page readback; verify tracking on the pinned mobile host;
+  and return album state without waiting for the folder-list API.
+- Upgrade JMComic to 1.4.15: follow the live 2.1.4 mobile signature and
+  publisher-announced `www.cdnutc.me` API line; support bounded, signed login
+  fallbacks; pin account state and mutations to one authenticated replica with
+  cache-bypassing reads; and remove redundant tracking/write confirmations.
+- Upgrade JMComic to 1.4.14: keep favorite, rating, and tracking controls
+  available while background state refreshes; restore the current mobile
+  client's version-signed POST mutations across inconsistent mirrors; and
+  render an unrated heart as an unfilled icon until the server confirms it.
+- Upgrade JMComic to 1.4.13: restore the official confirmation and folder
+  picker before adding a favorite; use the mobile client's real GET-with-body
+  protocol for favorite and rating mutations; verify writes on the same API
+  mirror; expose a persistent website session for custom folders; and align
+  the rating heart colors and success wording with the website.
+- Upgrade JMComic to 1.4.12: move favorite, one-way like, and serial tracking
+  back to the authenticated mobile API; confirm every mutation with a fresh
+  server readback; prevent optimistic or ambiguous-timeout success; and cool
+  unhealthy mirrors before the next account action.
 - Upgrade JMComic to 1.4.2: replace Cloudflare-blocked community and library
   webpage scraping with the official blog and creator APIs, restore the three
   switchable editorial channels with rich article details, load current square
