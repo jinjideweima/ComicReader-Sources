@@ -13,6 +13,33 @@
         "*.wn01.download",
         "*.wcdn.date"
       ],
+      "authentication" : {
+        "cookieCapture" : {
+          "domains" : [
+            "www.wnacg.com"
+          ],
+          "excludedNames" : [
+            "_cfuvid",
+            "cf_clearance"
+          ]
+        },
+        "formLogin" : {
+          "encoding" : "urlEncoded",
+          "headers" : {
+            "Origin" : "https://www.wnacg.com",
+            "Referer" : "https://www.wnacg.com/users-login.html",
+            "User-Agent" : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+          },
+          "passwordField" : "login_pass",
+          "staticFields" : {
+            "normal" : "1",
+            "remember_pass" : "1"
+          },
+          "successJSONPath" : "ret",
+          "url" : "https://www.wnacg.com/users-check_login.html",
+          "usernameField" : "login_name"
+        }
+      },
       "contentRating" : "adult",
       "fallbackBaseURL" : "https://www.wnacg.com",
       "features" : [
@@ -48,9 +75,24 @@
         },
         {
           "category" : "interaction",
-          "description" : "读取作品详情页的公开评论。",
+          "description" : "读取热门或最新评论，并支持发表评论、楼层回复、点赞与点踩。",
           "id" : "comments",
-          "title" : "评论区"
+          "requiresAccount" : true,
+          "title" : "互动评论区"
+        },
+        {
+          "category" : "library",
+          "description" : "同步官网书架分类、收藏列表，以及详情页加入或移出书架。",
+          "id" : "account_shelf",
+          "requiresAccount" : true,
+          "title" : "官网书架同步"
+        },
+        {
+          "category" : "account",
+          "description" : "原生查看个人空间、资料、头像、屏蔽、私信、评论通知、作品、关注与粉丝；高风险写入在官网确认。",
+          "id" : "account_center",
+          "requiresAccount" : true,
+          "title" : "账号中心"
         }
       ],
       "id" : "wnacg",
@@ -63,7 +105,9 @@
       "name" : "绅士漫画",
       "permissions" : [
         "network",
-        "persistentPreferences"
+        "persistentPreferences",
+        "accountAuthentication",
+        "accountCookies"
       ],
       "preferences" : [
         {
@@ -120,14 +164,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/wnacg/source.js",
-      "sha256" : "0f5a371f78f6e37f715b66c36f66dd813e588870169bf167f1e513f5fbda85e4",
+      "sha256" : "d330eefa25f267d371358e4187492361d435274fe8b6586a736e3087914faef0",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "L4vrDYi7jvi1JZB1r4uToA4ljkgeRnGUroOz7ub2J2RqXXwnTa/ujvhdK2KchNqhOieB7vdC5l57DhqR4oJkCw=="
+        "value" : "pkIfG7NRPFBfCmM9Bq7901NrdxjIm780V4blonByVsIZp/ncPK6TOwPeiFzIWYMmz3Xfwde/2v8dWj4TykjhDg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/wnacg/source.js",
-      "version" : "1.0.1"
+      "version" : "1.1.2"
     },
     {
       "allowedHosts" : [
@@ -272,7 +316,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "zu98gEThv5KIr+S8gR2H78T9AY71lCQtMxniED6Yboq6QAIR0t3fgXG+FzkvVvsptMYNOrvPwQTvHWRRmqWfCw=="
+        "value" : "QIYbzh+/SAkMEcDpdfSyNmwVE5fxF7U3BpJzjFni5eTs0Nvxm7A72gGURGFBLed0DFZmsvmoeHFlUdvqku1BAg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -396,7 +440,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "d7Ptn0l4gmw9V1cn3TNDFZl6dC1Bc5IBz9UkhX8KeT5onvzzrQxAX2dZEMIpdbQe437ph33UJC5m1NDJOyIFDw=="
+        "value" : "4HNKdgzWhW6pIkLtlKyDiTWY4s2d4/JXyj5kNZQHPRzcNlfxZZvlXQn+npo2G0jQ1qShtqnwxO5tVJVQ2v3eBw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -619,7 +663,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "P0Omf7wn4RmjM7m0GbMXm6bUwQIQDx/Daz5rELijsXkcGrPTZRCvl6npi4SWTmr5tCDOaz62KhJwQRsielZ/CA=="
+        "value" : "mp9xi2ywO3+sBY57izUkknP8kTeSMSKj6k/TeXsl0eH9zH/vvgtfosA+jKMKB57frd2I63WbTEI4jgDp9jVEDQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.5.3"
@@ -783,7 +827,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "KIhR0NdjrqgtTg6Lxb1Dk5veoC6ptw5Y3eNnoH3OPBU2vggx1+lmr6LLjwFclvR/I+g6drpXNtjI1TXiVfebBg=="
+        "value" : "TlsbmqYCKI7hQNsh/k+BRnr0197MPmFRMqDhjQJmhzuiXdqYtkTslg1kSTTclyfQchCfKqGfTiB412rWbY6gCA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
@@ -970,7 +1014,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "3VqTh1TIEm1CA44yK9OEfYmcgoNcw/joXUZF84x1LfCc5/tQqTQ1ZN/jyQJAVJj2Zuk8joOW2D/oFEo6x3ItBA=="
+        "value" : "UhOZxqnpuIw7CHopNTFixXkAqpLgN32UWh/GckFh4szz/wC925jvuXLy+8O9LVvJ1wd3eSL6nNGF5TZ2ADs8CQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
       "version" : "1.4.20"
