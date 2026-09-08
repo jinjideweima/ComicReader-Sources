@@ -168,7 +168,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "pkIfG7NRPFBfCmM9Bq7901NrdxjIm780V4blonByVsIZp/ncPK6TOwPeiFzIWYMmz3Xfwde/2v8dWj4TykjhDg=="
+        "value" : "rEKR3gu2yHaMrAEz/Gz8FmWQGFeN/CvNGarLw6uR6Pa/C7PWlecQylvzqRMNVaf6+Kw8dy9gA24mUQKNMRgpBw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/wnacg/source.js",
       "version" : "1.1.2"
@@ -316,7 +316,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "QIYbzh+/SAkMEcDpdfSyNmwVE5fxF7U3BpJzjFni5eTs0Nvxm7A72gGURGFBLed0DFZmsvmoeHFlUdvqku1BAg=="
+        "value" : "bwJOT1RE5g0jZ406tlJpMoLXBQlzZ5RqKvJYVi9aL++QjkMhzl/sthaKW6xqCKW0j+13fSIzZMfGXWb9LFnvDQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -440,7 +440,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "4HNKdgzWhW6pIkLtlKyDiTWY4s2d4/JXyj5kNZQHPRzcNlfxZZvlXQn+npo2G0jQ1qShtqnwxO5tVJVQ2v3eBw=="
+        "value" : "lb5R8e6oiDuB9mSFXp9eS4p2ZF2zXch4eAN9KYFnbJdgiNzsYB1fA1zmRqgFSwrmb1wwkMj7ujJYMvzMseT5AQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -663,7 +663,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "mp9xi2ywO3+sBY57izUkknP8kTeSMSKj6k/TeXsl0eH9zH/vvgtfosA+jKMKB57frd2I63WbTEI4jgDp9jVEDQ=="
+        "value" : "Bobiz5X/281QeXwiSScj2W0UwCU2Ug3IdZIw/ScfoLhgCUQkb51KFQON+ZxBYjgk4pbTXBUMcgWgFPzK94jyDg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.5.3"
@@ -827,7 +827,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "TlsbmqYCKI7hQNsh/k+BRnr0197MPmFRMqDhjQJmhzuiXdqYtkTslg1kSTTclyfQchCfKqGfTiB412rWbY6gCA=="
+        "value" : "Deh6R51VsRsjOeCAcFvaAotCWti9nbeT/FSvQNrkSfM7GdvhzlE0P4a1SDwSRJKiVPxJfdr0M0ONFP/0dwjDDA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
@@ -1014,10 +1014,98 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "UhOZxqnpuIw7CHopNTFixXkAqpLgN32UWh/GckFh4szz/wC925jvuXLy+8O9LVvJ1wd3eSL6nNGF5TZ2ADs8CQ=="
+        "value" : "YUItx6LK5L4sbrtlM88BobRwRtEL5tEJIYVbsKkLSd9jpSjJJnmGm+MKK3b0RdFvHYhGvUuIt+wAr+H5J1nMBQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
       "version" : "1.4.20"
+    },
+    {
+      "allowedHosts" : [
+        "kzo.moe",
+        "kmimg.moex.ink",
+        "img.mxomo.com",
+        "dl.kmoe9.com"
+      ],
+      "authentication" : {
+        "cookieCapture" : {
+          "domains" : [
+            "kzo.moe"
+          ],
+          "requiredNames" : [
+            "VLIBSID"
+          ]
+        },
+        "persistentWebLogin" : true,
+        "webLoginURL" : "https://kzo.moe/login.php"
+      },
+      "contentRating" : "adult",
+      "fallbackBaseURL" : "https://kzo.moe",
+      "features" : [
+        {
+          "category" : "discovery",
+          "id" : "search_filters",
+          "title" : "官网搜索、分类与排序"
+        },
+        {
+          "category" : "reading",
+          "id" : "download_only",
+          "requiresAccount" : true,
+          "title" : "整卷 EPUB 下载与离线阅读"
+        },
+        {
+          "category" : "reading",
+          "id" : "mobi_export",
+          "requiresAccount" : true,
+          "title" : "MOBI 文件下载与导出"
+        },
+        {
+          "category" : "account",
+          "id" : "account_overview",
+          "requiresAccount" : true,
+          "title" : "官网账号与额度"
+        },
+        {
+          "category" : "account",
+          "id" : "official_library_actions",
+          "requiresAccount" : true,
+          "title" : "收藏、订阅、已读与分类投票"
+        },
+        {
+          "category" : "interaction",
+          "id" : "ratings_reviews",
+          "requiresAccount" : true,
+          "title" : "评分、书评、回复与点赞"
+        },
+        {
+          "category" : "reading",
+          "id" : "official_push",
+          "requiresAccount" : true,
+          "title" : "Kindle 与 KOOBONE 官网推送"
+        }
+      ],
+      "id" : "kmoe",
+      "imageRequestHeaders" : {
+        "Referer" : "https://kzo.moe/"
+      },
+      "language" : "zh",
+      "license" : "Apache-2.0",
+      "name" : "Kmoe",
+      "permissions" : [
+        "network",
+        "accountAuthentication",
+        "accountCookies"
+      ],
+      "publisher" : "ComicReader Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "scriptURL" : "sources/kmoe/source.js",
+      "sha256" : "74e72f2d9c1e78b34f7bdb58c94211ba1c7f3af53a076771c635b9e7522f2d67",
+      "signature" : {
+        "algorithm" : "ed25519-v2",
+        "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
+        "value" : "Qu06xve3o/yYEb/9Ci0NtdNKof+HCxdfpNdGWqS5euvxRV/wroOi2V/sobz4krvzpTJwn6fNVp86UOYnFVsKDg=="
+      },
+      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/kmoe/source.js",
+      "version" : "1.1.0"
     }
   ]
 }
