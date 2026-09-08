@@ -8,7 +8,7 @@
     ['category', '分类（替换关键词）', ['全部'].concat(categories), [''].concat(categories.map(function (x) { return 'CAT*' + x; }))],
     ['region', '地区', ['全部', '日本', '欧美', '港台', '大陆', '韩国'], ['all', '日本', '歐美', '港臺', '大陸', '韓國']],
     ['status', '状态', ['全部', '完结', '连载'], ['all', '完結', '連載']],
-    ['sort', '排序', ['综合热度', '评分', '下载热度', '上升', '随机', '最新收录', '最近更新'], ['sortpoint', 'score', 'count_push', 'count_rise', 'random', 'newadd', 'lastupdate']],
+    ['sort', '排序', ['综合排序', '评价排名', '热度排序', '最近热门', '随机列表', '最近收录', '最近更新'], ['sortpoint', 'score', 'count_push', 'count_rise', 'random', 'newadd', 'lastupdate']],
     ['language', '语言', ['全部', '中文', '繁体', '简体', '日文', '英文', '其他'], ['all', 'chn', 'cht', 'chs', 'jpn', 'eng', 'oth']],
     ['length', '篇幅', ['全部', '短篇', '中篇', '长篇'], ['all', 's', 'm', 'l']],
     ['ignore', '隐藏分类', ['跟随官网', '不隐藏', '隐藏耽美'], ['', 'none', 'BL']],
@@ -25,21 +25,37 @@
     if (/^\/(?!\/)/.test(path)) return BASE + path;
     throw new Error('无效的官网地址');
   }
+  var publicPageCache = {};
   function request(path, fields) {
+    var cacheable = !fields && /^\/c\/[a-z0-9]+\.htm$/i.test(path);
+    var cached = publicPageCache[path];
+    if (cacheable && cached && Date.now() - cached.time < 15000) return cached.body;
+    if (fields || /(?:_do|_reply|_like|_score|_fav|_read|_follow)\.php/.test(path)) publicPageCache = {};
     var options = { timeout: 30, cachePolicy: 'reloadIgnoringLocalCacheData', headers: { 'User-Agent': UA, 'Referer': BASE + '/', 'Accept': 'text/html,application/json' } };
     if (fields) {
       options.method = 'POST'; options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
       options.body = Object.keys(fields).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(fields[k]); }).join('&');
     }
-    var r = fetch(url(path), options);
+    var r;
+    try { r = fetch(url(path), options); }
+    catch (error) {
+      if (/redirect.*allow-list/i.test(str(error))) throw new Error('官网将当前访问重定向到站外，请打开官网检查访问限制');
+      throw error;
+    }
     if (r.status >= 400) throw new Error('Kmoe HTTP ' + r.status);
     var body = str(r.body);
-    if (/id=["']ipt_passwd["']/.test(body)) throw new Error(errors.e401);
+    var publicPage = /disp_divinfo\s*\(|var\s+bookid\s*=/.test(body);
+    if (!publicPage && /id=["']ipt_passwd["']/.test(body)) throw new Error(errors.e401);
+    if (/<title>\s*Google\s*<\/title>/i.test(body)) throw new Error('官网将当前访问重定向到站外，请打开官网检查访问限制；这不是下载额度不足');
     // Match actual response callbacks, never the error dictionary in a full page.
     // Full catalogue/detail pages contain dormant display_codeinfo("e430")
     // branches. Only compact action responses represent an error callback.
-    var code = body.length < 2048 ? match(body, /(?:display_codeinfo|disp_codeinfo)\(\s*["'](e\d+|lv\d+|vip)["']/) : '';
+    var code = !publicPage && body.length < 2048 ? match(body, /(?:display_codeinfo|disp_codeinfo)\(\s*["'](e\d+|lv\d+|vip)["']/) : '';
     if (code) throw new Error(errors[code] || '官网拒绝此操作：' + code);
+    if (cacheable && publicPage) {
+      if (Object.keys(publicPageCache).length >= 16) publicPageCache = {};
+      publicPageCache[path] = { time: Date.now(), body: body };
+    }
     return body;
   }
   function json(path) { var body = request(path); try { return JSON.parse(body); } catch (_) { throw new Error('官网接口未返回有效数据，请检查登录或完成官网验证'); } }
@@ -165,7 +181,7 @@
     var description = match(body, /getElementById\("div_desc_content"\)\.innerHTML\s*=\s*"((?:\\.|[^"\\])*)"/);
     var related = [], recommendations = [];
     var dataKey = match(body, /data_book\(\s*["']([a-z0-9]+)["']\s*\)/i);
-    if (Number(variable(body, 'uin')) > 0 && dataKey) {
+    if (manga.info && manga.info.loadRelated === '1' && Number(variable(body, 'uin')) > 0 && dataKey) {
       try {
         var bookData = json('/data_book.php?h=' + encodeURIComponent(dataKey));
         if (bookData.linkbook) {
@@ -418,7 +434,7 @@
   }
   globalThis.__source = {
     getPopular: function (p) { return listing(p, '', []); },
-    getLatest: function (p) { return listing(p, '', [{ key: 'sort', value: '6' }]); },
+    getLatest: function (p) { return listing(p, '', []); },
     search: listing,
     getFilterList: function () { return definitions.map(function (d) { return { key: d[0], name: d[1], kind: d[0] === 'sort' ? 'sort' : 'select', values: d[2], defaultValue: '0', scope: 'always' }; }); },
     getHome: function () { var items = listing(1, '', []).items; return { heroes: [], popular: items, toplist: [], editor: [], rising: [], hotCategories: [] }; },
