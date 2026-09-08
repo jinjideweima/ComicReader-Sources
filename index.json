@@ -168,7 +168,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "EsuOnNFdhvMOCl9AZ3adg/HMmfZ3fv3AbpkxbPt65GG4FqVUMJ9YZbilBqOo/J/8RQLoGQ9vPXWiEWCbg5YCDA=="
+        "value" : "wpslB9mrjG7Q23P4gQObhrzDoRgYBxAKQGFfQ2LVTAUfCBOHfDNHxxuJ7fgzMcrolYnUXaut5Pzt55/1+IwEBA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/wnacg/source.js",
       "version" : "1.1.2"
@@ -316,7 +316,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "gNq5a4jATFhnVCdHizTQ3EIcTV8wesRQR0EAxPh0TjaVOAypv9ePWoneuKTC9lGwCtVilh9uvfnQuxI6cAXZCQ=="
+        "value" : "XR2FG3mgdnxtjnbLmJcZIhMTrkwJ1YkkGnBHFczLw+p7nah97mK/9tGeRaFIZpVtJwg0aKJPcHVqlObje96ECA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -440,7 +440,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "TZYhmdMS1iIYDemxTVWBXCcmcG/e69dieIWS1KRfQ30+Is2je83QyEVjtXHnLWzWW1CuLONQQEgJ8MEDym3mCQ=="
+        "value" : "LhKsvHk2ji9gmwWbjWxtCXI/6VYKDGOGLf4JFwAOwtsJso+ltKHxXUBMXn8z6Az0kHzgYrXnsLh7oKgU3QxuCw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -663,7 +663,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "UNrkmYH61FZjJ65+Xbn/s4aainmFz4guW+ybjdI/BI5uhHdgCZhyfqt5EzK4ifjPOc7O/FKJ9HdVn9N+IsdUAA=="
+        "value" : "3ENYHNtZCap5uGVYhLp+BB+CA9tqD3NkKq4dL7K+MmG6qIXFbwr2S3lzRBcM3Oa8Br7qTVVdVX9hgNSXUqFdCA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.5.3"
@@ -827,7 +827,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "UuBqxdtL8ZDrD9ToZ28GWTWtJbOzNUnMj66c42kO8jQdcy+T/ICuC2ys9ZlEj1wnG+FuNjnyY80vjyVe7oOoBA=="
+        "value" : "MiDJFqVscumUvhjCHjlHm6MfyaVpBRtkYmSHmuqZx6a2Fp7u1mnk/wH/6WQHdub36P1Wpj55+/rGB9I+VusyBQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
@@ -1014,7 +1014,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "GgNenNqXrsySkshthIaI+HQKwmkoVt/76BndgHxkCDYgV3d/Ih1s2ONUkzcJmqSVlVMqBgRUx2hoRjyaD471CQ=="
+        "value" : "cDmzkX8szHD3xC8RDPE5uNXGc2LxeRvw0X8p2UeuiLJ9W9cE6ZFBCqXZsJFoN6obKagRVAVQC+xhg3xQ0gscAg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
       "version" : "1.4.20"
@@ -1098,14 +1098,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/kmoe/source.js",
-      "sha256" : "68975dc372821648bd03a115dbe3c95b24c4c0c261b291bfb219bd7af7498342",
+      "sha256" : "64225853669648ad0632c049633f07bb6e9d3604758869c69a6f837ce28e0005",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "ga/B/FYmvazvHQKQgrzqXZssFnvo3rMA/hQ1vorJH2d7SR4tRJikz4IBD2BkzLMgP9JNgz2FjNJO4ynydhK/Ag=="
+        "value" : "iQCGd8FkEFIL6kaxDxK2ika/pS83aebUNRMlhjQMN72wqkAwbbIJ0pyXP6Bc79RT++IFq6b89ZNuk4w9c8MMCA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/kmoe/source.js",
-      "version" : "1.1.0"
+      "version" : "1.2.0"
     }
   ]
 }

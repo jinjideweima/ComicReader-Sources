@@ -102,6 +102,18 @@
     var re = new RegExp('(?:' + label + ')\\s*[：:]\\s*([\\s\\S]*?)' + (next ? '(?=(?:' + next + ')\\s*[：:])' : '$'));
     return text(match(source, re));
   }
+  function resolveTitleCards(titles, limit) {
+    var output = [], seen = {};
+    (titles || []).slice(0, limit || 6).forEach(function (title) {
+      try {
+        var matches = listing(1, title, []).items;
+        var normalized = text(title);
+        var item = matches.filter(function (m) { return text(m.title) === normalized; })[0] || matches[0];
+        if (item && !seen[item.id]) { seen[item.id] = true; output.push(item); }
+      } catch (_) {}
+    });
+    return output;
+  }
   function detail(manga) {
     var body = request(manga.url), doc = parseHTML(body, BASE);
     var id = variable(body, 'bookid');
@@ -120,6 +132,10 @@
     var categoryValues = [], cm, categoryRe = /([^\s()]+)\s*\((\d+)\)/g;
     while ((cm = categoryRe.exec(categoriesText))) categoryValues.push(text(cm[1]));
     var scoreNode = doc.selectFirst('.book_score'), scoreText = scoreNode ? scoreNode.text().replace(/\s+/g, ' ').trim() : '';
+    function visible(id) {
+      var node = doc.selectFirst('#' + id);
+      return !!node && !/display\s*:\s*none/i.test(node.attr('style') || '');
+    }
     var info = Object.assign({}, manga.info || {}, {
       bookID: id,
       author: author,
@@ -139,10 +155,31 @@
       readCount: labeled(summary, '讀過|读过', '熱度|热度'),
       heat: labeled(summary, '熱度|热度', '分類|分类'),
       rating: match(scoreText, /(\d+(?:\.\d+)?)/),
-      ratingCount: match(scoreText, /(\d+)\s*人評價/)
+      ratingCount: match(scoreText, /(\d+)\s*人評價/),
+      ratingScale: '10',
+      userRatingScale: '5',
+      isRead: (function () { var link = doc.selectFirst('a[title="取消已讀"] img'); return link && !/display\s*:\s*none/i.test(link.attr('style') || '') ? '1' : '0'; })(),
+      isFavorited: Number(variable(body, 'can_do_fav')) === 0 ? '1' : '0',
+      isKoobSubscribed: visible('ftokoob_button_no') ? '1' : '0'
     });
     var description = match(body, /getElementById\("div_desc_content"\)\.innerHTML\s*=\s*"((?:\\.|[^"\\])*)"/);
-    return { html: body, manga: Object.assign({}, manga, { title: title, author: author || manga.author, description: text(description), genres: categoryValues, tagGroups: categoryValues.length ? [{id:'categories',title:'分类',values:categoryValues}] : [], status: variable(body, 'bookstatus') === '完結' ? 'completed' : 'ongoing', info: info, highResolutionCoverURL: manga.coverURL }) };
+    var related = [], recommendations = [];
+    var dataKey = match(body, /data_book\(\s*["']([a-z0-9]+)["']\s*\)/i);
+    if (Number(variable(body, 'uin')) > 0 && dataKey) {
+      try {
+        var bookData = json('/data_book.php?h=' + encodeURIComponent(dataKey));
+        if (bookData.linkbook) {
+          var linked = str(bookData.linkbook).split(','), linkedTitles = [];
+          for (var li = 1; li < linked.length; li += 2) linkedTitles.push(linked[li]);
+          related = resolveTitleCards(linkedTitles, 4);
+        }
+        if (Number(bookData.needrec) >= 1 && bookData.hash && bookData.bookname) {
+          var recData = json('/data_recbook.php?h=' + encodeURIComponent(bookData.hash) + '&n=' + encodeURIComponent(bookData.bookname));
+          recommendations = resolveTitleCards(Array.isArray(recData.recbook) ? recData.recbook : [], 4);
+        }
+      } catch (_) {}
+    }
+    return { html: body, manga: Object.assign({}, manga, { title: title, author: author || manga.author, description: text(description), genres: categoryValues, tagGroups: categoryValues.length ? [{id:'categories',title:'分类',values:categoryValues}] : [], relatedMangas: related, recommendations: recommendations, status: variable(body, 'bookstatus') === '完結' ? 'completed' : 'ongoing', info: info, highResolutionCoverURL: manga.coverURL }) };
   }
   function volumes(manga) {
     var d = detail(manga), h = d.html;
@@ -231,13 +268,27 @@
     var d = detail(manga), order = sort === 'latest' ? 2 : sort === 'reply' ? 3 : 1;
     var h = request('/book_comm_list.php?b=' + d.manga.info.bookID + '&p=' + Math.max(1, page || 1) + '&o=' + order);
     var rows = quotedArgs(h, 'disp_book_comm_item2'), pagination = quotedArgs(h, 'disp_book_comm_title');
-    return { comments: rows.map(function (r) { return { id: r[7], author: text(r[2]), avatarURL: r[3], dateText: r[10], body: text(r[13]) + (r[14] ? '\n\n回复：' + text(r[14]) : ''), score: r[8], likes: Number(r[11]), userVote: Number(r[12]), isUploader: false }; }), hasNextPage: pagination.length > 0 && Number(pagination[0][1]) > (page || 1), total: pagination.length ? Number(pagination[0][0]) : null };
+    var comments = [];
+    rows.forEach(function (r) {
+      var rootID = r[7];
+      comments.push({ id: rootID, author: text(r[2]), avatarURL: r[3], dateText: r[10], body: text((r[9] ? r[9] + '\n' : '') + r[13]), score: r[8], likes: Number(r[11]), userVote: Number(r[12]), isUploader: false, parentID: null, isReply: false, threadDepth: 0, chapterID: str(Math.max(1, page || 1)) });
+      var replyDoc = parseHTML('<div id="replies">' + str(r[14]) + '</div>', BASE);
+      replyDoc.select('#replies > div').forEach(function (node, index) {
+        var raw = node.text().replace(/\s+/g, ' ').trim();
+        var authorNode = node.selectFirst('a b');
+        var authorName = authorNode ? authorNode.text().trim() : '回复';
+        var replyDate = text(match(node.html(), /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/));
+        var replyBody = raw.replace(new RegExp('^' + authorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*回覆\\s*[：:]\\s*'), '').replace(/\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s*$/, '').trim();
+        comments.push({ id: rootID + '-reply-' + (index + 1), author: authorName, dateText: replyDate, body: replyBody, parentID: rootID, isReply: true, replyToAuthor: text(r[2]), threadDepth: 1, isUploader: false, chapterID: str(Math.max(1, page || 1)) });
+      });
+    });
+    return { comments: comments, hasNextPage: pagination.length > 0 && Number(pagination[0][1]) > (page || 1), total: pagination.length ? Number(pagination[0][0]) : null };
   }
   function bookTool(slug) {
     var d = detail(bookRef(slug)), h = d.html, actions = [], prefix = 'book:' + slug + ':';
     if (!(Number(variable(h, 'uin')) > 0)) throw new Error(errors.e401);
-    actions.push(action(prefix + 'favorite', '更新官网收藏', [field('value', '收藏', Number(variable(h, 'can_do_fav')) === 0 ? '1' : '0', [option('1', '收藏'), option('0', '取消收藏')])]));
-    actions.push(action(prefix + 'follow', '更新官网订阅', [field('target', '推送目标', '1', [option('1', 'Kindle'), option('9', 'KOOBONE')]), field('value', '订阅', '1', [option('1', '订阅'), option('0', '取消订阅')])], '官网订阅会在作品更新时自动推送到所选设备。'));
+    actions.push(action(prefix + 'favorite', '更新官网收藏', [field('value', '收藏', Number(variable(h, 'can_do_fav')) === 0 ? '0' : '1', [option('1', '收藏'), option('0', '取消收藏')])]));
+    actions.push(action(prefix + 'follow', '更新官网订阅', [field('target', '推送目标', '9', [option('9', 'KOOBONE'), option('1', 'Kindle')]), field('value', '订阅', d.manga.info.isKoobSubscribed === '1' ? '0' : '1', [option('1', '订阅'), option('0', '取消订阅')])], '官网订阅会在作品更新时自动推送到所选设备。'));
     actions.push(action(prefix + 'rating', '提交评分', [field('score', '评分', '5', [1,2,3,4,5].map(function (n) { return option(n, n + ' 星'); }))]));
     actions.push(action(prefix + 'read', '更新已读状态', [field('value', '已读', '1', [option('1', '设为已读'), option('0', '取消已读')])], '此处同步官网已读标记，不代表文件已下载到本机。'));
     actions.push(action(prefix + 'review', '发表书评', [field('body', '书评正文', ''), field('score', '评分', '5', [1,2,3,4,5].map(function (n) { return option(n, n + ' 星'); })), field('spoiler', '包含剧透', '0', [option('0', '否'), option('1', '是')])], '将公开发布到 Kmoe 官网，官网要求两篇书评间隔至少 10 分钟。'));
@@ -255,7 +306,7 @@
     var d = detail(bookRef(slug)), order = sort === 'latest' ? 2 : sort === 'reply' ? 3 : 1;
     var h = request('/book_comm_list.php?b='+d.manga.info.bookID+'&p='+page+'&o='+order);
     var rows = quotedArgs(h,'disp_book_comm_item2'), pages = quotedArgs(h,'disp_book_comm_title');
-    var totalPages = pages.length ? Number(pages[0][1]) : 1, actions=[], sections=[], links=[];
+    var totalPages = pages.length ? Number(pages[0][1]) : 1, actions=[], sections=[], links=[{id:'report',title:'举报书评',url:BASE+'/book_comm.php?b='+d.manga.info.bookID+'&t=2'}];
     actions.push(action('browse:comments:'+slug+':1:'+sort,'切换书评排序',[field('sort','排序',sort,[option('hot','点赞最多'),option('latest','最新发布'),option('reply','最近回复')])]));
     rows.forEach(function(r){
       sections.push({id:r[7],title:text(r[2])+' · '+r[10]+' · '+r[11]+' 赞',metrics:[{id:'body',title:r[8]+' 星',value:text(r[13])},{id:'replies',title:'回复',value:text(r[14])||'暂无回复'}]});
@@ -337,7 +388,7 @@
   }
   function favorite(manga) {
     var h = detail(manga).html;
-    if (!(Number(variable(h, 'uin')) > 0)) throw new Error(errors.e401);
+    if (!(Number(variable(h, 'uin')) > 0)) return { isSupported: true, isFavorited: false, categories: [], category: 0, message: '登录后可同步官网收藏' };
     return { isSupported: true, isFavorited: Number(variable(h, 'can_do_fav')) === 0, categories: [], category: 0 };
   }
   function follow(manga, type, on) {
@@ -382,6 +433,18 @@
     getComments: function(m) { return commentsPage(m,1).comments; },
     getCommentsPage: commentsPage,
     submitComment: submitComment,
+    submitCommentAdvanced: function(m, body, spoiler, parentID) {
+      var d = detail(m), value = str(body).trim();
+      if (!(Number(variable(d.html, 'uin')) > 0)) throw new Error(errors.e401);
+      if (parentID) {
+        if (!/^\d+$/.test(parentID) || value.length < 3) throw new Error('回复至少三个字');
+        request('/book_comm_reply.php?c=' + parentID + '&r=' + encodeURIComponent(value));
+        return {isSupported:true,didSubmit:true,message:'回复已发布到 Kmoe 官网',comments:commentsPage(m,1,'hot').comments};
+      }
+      if (value.length < 20) throw new Error('Kmoe 书评至少需要二十个字');
+      request('/book_comm_do.php', {bookid:d.manga.info.bookID,comm_content:value,comm_spoiler:spoiler?'1':'0',book_score:'5'});
+      return {isSupported:true,didSubmit:true,message:'书评已发布到 Kmoe 官网',comments:commentsPage(m,1,'latest').comments};
+    },
     getFavoriteState: favorite,
     setFavorite: function (m) { return follow(m, 0, true); },
     removeFavorite: function (m) { return follow(m, 0, false); },
