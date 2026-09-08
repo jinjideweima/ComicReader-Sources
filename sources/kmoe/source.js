@@ -106,18 +106,23 @@
     var body = request(manga.url), doc = parseHTML(body, BASE);
     var id = variable(body, 'bookid');
     if (!/^\d+$/.test(id)) throw new Error('未找到官网作品编号');
-    var titleNode = doc.select('.text_bglight_big')[0], authorBox = doc.select('td.author')[0];
+    var titleNode = doc.selectFirst('.text_bglight_big'), authorBox = doc.selectFirst('td.author');
     var summary = authorBox ? authorBox.text().replace(/\s+/g, ' ').trim() : '';
     var title = titleNode ? titleNode.text() : manga.title;
     var aliases = summary.indexOf(title) === 0 ? summary.slice(title.length).replace(/^\s+/, '') : '';
     aliases = match(aliases, /^(.+?)(?=作者\s*[：:])/);
-    var author = labeled(summary, '作者', '狀態|状态');
+    var author = '';
+    if (authorBox) authorBox.select('a[href*="list.php?s="]').forEach(function (node) {
+      if (!author && node.text().trim()) author = node.text().trim();
+    });
+    if (!author) author = text(match(summary, /作者\s*[：:]\s*([\s\S]*?)(?=(?:狀態|状态)\s*[：:])/));
     var categoriesText = labeled(summary, '分類|分类', '');
     var categoryValues = [], cm, categoryRe = /([^\s()]+)\s*\((\d+)\)/g;
     while ((cm = categoryRe.exec(categoriesText))) categoryValues.push(text(cm[1]));
-    var scoreNode = doc.select('.book_score')[0], scoreText = scoreNode ? scoreNode.text().replace(/\s+/g, ' ').trim() : '';
+    var scoreNode = doc.selectFirst('.book_score'), scoreText = scoreNode ? scoreNode.text().replace(/\s+/g, ' ').trim() : '';
     var info = Object.assign({}, manga.info || {}, {
       bookID: id,
+      author: author,
       delivery: 'downloadOnly',
       quota: variable(body, 'quota_now') + ' M',
       format: 'EPUB / MOBI',
@@ -171,10 +176,10 @@
   }
   function overview() {
     var body = request('/my.php'), doc = parseHTML(body, BASE);
-    var nickname = doc.select('#div_nickname_display')[0];
+    var nickname = doc.selectFirst('#div_nickname_display');
     if (!nickname) throw new Error(errors.e401);
     var level = variable(body, 'user_level'), vip = Number(variable(body, 'is_vip'));
-    var node = doc.select(vip ? '#div_user_vip' : Number(level) <= 1 ? '#div_user_lv1' : '#div_user_nor')[0];
+    var node = doc.selectFirst(vip ? '#div_user_vip' : Number(level) <= 1 ? '#div_user_lv1' : '#div_user_nor');
     return { isSupported: true, sections: [{ id: 'account', title: '官网账号与额度', metrics: [
       { id: 'level', title: '等级', value: 'Lv' + level + (vip ? ' · VIP' : '') },
       { id: 'quota', title: '额度与重置规则', value: node ? node.text().replace(/\s+/g, ' ').trim() : '请在官网账号页面查看' }
@@ -188,8 +193,8 @@
     return doc.select('#' + id + ' option').map(function (n) { return option(n.attr('value'), n.text()); });
   }
   function selected(doc, id) {
-    var selected = doc.select('#' + id + ' option[selected]')[0];
-    var first = doc.select('#' + id + ' option')[0];
+    var selected = doc.selectFirst('#' + id + ' option[selected]');
+    var first = doc.selectFirst('#' + id + ' option');
     return selected ? selected.attr('value') : first ? first.attr('value') : '';
   }
   function tool(kind) {
@@ -199,7 +204,7 @@
     var body = request(t[0]), doc = parseHTML(body, BASE), sections = [], actions = [];
     if (kind === 'overview' || kind === 'profile') {
       sections = overview().sections;
-      var nickname = doc.select('input[name=nickname]')[0];
+      var nickname = doc.selectFirst('input[name=nickname]');
       actions.push(action('profile:nickname', '保存昵称', [field('nickname', '昵称', nickname ? nickname.attr('value') : '')]));
       [['10', 'sel_uhometab', '主页默认分类'], ['1', 'sel_deffile', '漫画默认分页']].forEach(function (d) {
         actions.push(action('profile:setting:' + d[0], '保存' + d[2], [field('value', d[2], selected(doc, d[1]), selectFields(doc, d[1]))]));
@@ -342,7 +347,7 @@
     return favorite(manga);
   }
   function ratingState(manga) {
-    var d = detail(manga), node = parseHTML(d.html, BASE).select('.book_score')[0];
+    var d = detail(manga), node = parseHTML(d.html, BASE).selectFirst('.book_score');
     var value = node ? node.text().replace(/\s+/g, ' ') : '';
     return { isSupported: true, average: d.manga.info.rating || null, count: d.manga.info.ratingCount || null, userRating: Number(variable(d.html, 'my_score')) || null, message: '评分与评价人数来自 Kmoe 官网' };
   }
