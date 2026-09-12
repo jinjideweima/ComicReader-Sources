@@ -1,3 +1,9 @@
+## Kmoe 1.2.4 — 2026-09-12
+
+- Restore anonymous catalogue, pagination, and search through the official public data_list.php endpoint when desktop content routes redirect to Google.
+- Preserve canonical book URLs and site-provided ordering, scores, covers, and pagination; reject malformed responses instead of showing an empty success.
+- No account, quota, download permission, or allowed-domain changes. Desktop detail routes can still be unavailable independently of the public catalogue API.
+
 ## Kmoe 1.2.3 — 2026-09-12
 
 - Recognize empty HTTP redirects to login or off-site pages before attempting book-ID parsing.

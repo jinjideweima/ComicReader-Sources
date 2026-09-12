@@ -39,6 +39,10 @@
     if (cacheable && cached && Date.now() - cached.time < 15000) return cached.body;
     if (fields || /(?:_do|_reply|_like|_score|_fav|_read|_follow)\.php/.test(path)) publicPageCache = {};
     var options = { timeout: 30, cachePolicy: 'reloadIgnoringLocalCacheData', headers: { 'User-Agent': UA, 'Referer': BASE + '/', 'Accept': 'text/html,application/json' } };
+    if (/^\/data_list\.php(?:\?|$)/.test(path)) {
+      options.headers['Referer'] = BASE + '/m/';
+      options.headers['X-KM-FROM'] = 'KMOE/3.0.0(WEB) GET /m/';
+    }
     if (fields) {
       options.method = 'POST'; options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
       options.body = Object.keys(fields).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(fields[k]); }).join('&');
@@ -107,6 +111,48 @@
     return result;
   }
   function listing(page, query, filters) {
+    var chosen = {};
+    (filters || []).forEach(function (f) { chosen[f.key] = f.value; });
+    // The desktop-only hide override is not exposed by the mobile API.
+    // Preserve that explicit choice through its original official route.
+    if (chosen.ignore && chosen.ignore !== '0') return legacyListing(page, query, filters);
+    function value(key) {
+      var d = definitions.filter(function (x) { return x[0] === key; })[0];
+      var n = parseInt(chosen[key] || '0', 10);
+      return d[3][n] == null ? d[3][0] : d[3][n];
+    }
+    function any(key) { var v = value(key); return v === 'all' ? '' : v; }
+    // Same public JSON endpoint and parameters as /m/ and zzfunc.js.
+    // Credentials stay in the host's domain-scoped cookie store; k is empty
+    // just as it is in the official web frontend.
+    var fields = { k: '', s: value('category') || str(query).trim(),
+      end: any('status'), lang: any('language'), blen: any('length'),
+      regn: any('region'), by: value('sort'), color: value('color'),
+      hd: value('hd'), p: str(Math.max(1, page || 1)) };
+    var path = '/data_list.php?' + Object.keys(fields).map(function (k) {
+      return k + '=' + encodeURIComponent(fields[k]);
+    }).join('&');
+    var data = json(path);
+    if (!Array.isArray(data.data) || !isFinite(Number(data.totalpage)) || !isFinite(Number(data.nowpage))) {
+      throw new Error('官网漫画列表未返回有效分页数据，请稍后重试');
+    }
+    var seen = {}, items = [];
+    data.data.forEach(function (book) {
+      var link = str(book.url_book), id = match(link, /^https:\/\/kzo\.moe\/c\/([a-z0-9]+)\.htm$/i);
+      if (!id || !str(book.name).trim()) throw new Error('官网漫画列表包含无法识别的作品，请稍后重试');
+      if (seen[id]) return;
+      seen[id] = true;
+      items.push({ id: id, url: link, title: text(book.name), coverURL: str(book.url_cover),
+        author: text(book.author), genres: [],
+        status: book.status === '完結' ? 'completed' : book.status === '連載' ? 'ongoing' : 'unknown',
+        info: { rating: str(book.score), delivery: 'downloadOnly', language: str(book.lang),
+          update: str(book.lastupdate), latestVolume: str(book.newvol) } });
+    });
+    var current = Math.max(1, Number(data.nowpage)), total = Math.max(0, Number(data.totalpage));
+    return { items: items, hasNextPage: current < total,
+      metadata: { page: str(current), totalPages: str(total), pageSize: '21' } };
+  }
+  function legacyListing(page, query, filters) {
     var chosen = {}, parts = [];
     if (!str(query).trim() && !(filters || []).length) {
       var home = request('/l/--/' + Math.max(1, page || 1) + '.htm');
