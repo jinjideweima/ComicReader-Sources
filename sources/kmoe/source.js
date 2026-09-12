@@ -50,6 +50,13 @@
       throw error;
     }
     if (r.status >= 400) throw new Error('Kmoe HTTP ' + r.status);
+    if (r.status >= 300 && r.status < 400) {
+      var location = '', headers = r.headers || {};
+      Object.keys(headers).forEach(function (key) { if (key.toLowerCase() === 'location') location = str(headers[key]); });
+      if (/^(?:https:\/\/kzo\.moe)?\/login(?:_act)?\.php(?:[?/#]|$)/i.test(location)) throw new Error(errors.e401);
+      if (location && !/^https:\/\/kzo\.moe(?:\/|$)/i.test(location) && !/^\/(?!\/)/.test(location)) throw new Error('官网将当前网络的访问重定向到站外，请先确认浏览器能正常打开官网；这不是作品编号或额度问题');
+      throw new Error('官网返回了尚未完成的页面跳转，请重新打开详情（HTTP ' + r.status + '）');
+    }
     var body = str(r.body);
     if (r.url && !/^https:\/\/kzo\.moe(?:\/|$)/i.test(r.url)) throw new Error('官网将当前访问重定向到站外，请在官网确认访问状态后重试');
     if (!body.trim()) throw new Error('官网返回空白内容，请稍后重试');

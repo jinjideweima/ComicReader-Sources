@@ -1,3 +1,7 @@
+## Kmoe 1.2.3 — 2026-09-12
+
+- Recognize empty HTTP redirects to login or off-site pages before attempting book-ID parsing.
+
 ## Kmoe 1.2.2 — 2026-09-12
 
 - Accept official literal and form book identifiers; distinguish empty, login and off-site responses.
