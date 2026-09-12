@@ -19,7 +19,13 @@
   function str(x) { return String(x == null ? '' : x); }
   function text(x) { return parseHTML('<div>' + str(x) + '</div>', BASE).text().replace(/\s+/g, ' ').trim(); }
   function match(html, re, fallback) { var m = str(html).match(re); return m ? m[1] : (fallback || ''); }
-  function variable(html, name) { return match(html, new RegExp('var\\s+' + name + '\\s*=\\s*(?:parseInt\\(\\s*)?["\x27]?([^"\x27;\\)\\s]+)')); }
+  function variable(html, name) {
+    // Read literal assignments only. Do not evaluate website JavaScript.
+    var re = new RegExp('(?:^|[\\s;,{}])(?:(?:var|let|const)\\s+|window\\.)?' + name + '\\s*=(?!=)\\s*(?:parseInt\\(\\s*)?["\x27]?([^"\x27;\\)\\s<]+)', 'g');
+    var found, value = '';
+    while ((found = re.exec(str(html)))) value = found[1];
+    return value;
+  }
   function url(path) {
     if (/^https:\/\/kzo\.moe(?:\/|$)/i.test(path)) return path;
     if (/^\/(?!\/)/.test(path)) return BASE + path;
@@ -27,6 +33,7 @@
   }
   var publicPageCache = {};
   function request(path, fields) {
+    path = url(path).slice(BASE.length);
     var cacheable = !fields && /^\/c\/[a-z0-9]+\.htm$/i.test(path);
     var cached = publicPageCache[path];
     if (cacheable && cached && Date.now() - cached.time < 15000) return cached.body;
@@ -44,9 +51,11 @@
     }
     if (r.status >= 400) throw new Error('Kmoe HTTP ' + r.status);
     var body = str(r.body);
-    var publicPage = /disp_divinfo\s*\(|var\s+bookid\s*=/.test(body);
+    if (r.url && !/^https:\/\/kzo\.moe(?:\/|$)/i.test(r.url)) throw new Error('官网将当前访问重定向到站外，请在官网确认访问状态后重试');
+    if (!body.trim()) throw new Error('官网返回空白内容，请稍后重试');
+    var publicPage = /disp_divinfo\s*\(/.test(body) || /^\d+$/.test(variable(body, 'bookid')) || /class=["'][^"']*text_bglight_big/.test(body);
     if (!publicPage && /id=["']ipt_passwd["']/.test(body)) throw new Error(errors.e401);
-    if (/<title>\s*Google\s*<\/title>/i.test(body)) throw new Error('官网将当前访问重定向到站外，请打开官网检查访问限制；这不是下载额度不足');
+    if (/<title[^>]*>\s*Google(?:\s|<)/i.test(body) || /(?:location(?:\.href)?\s*=|url\s*=)\s*["']?https?:\/\/(?:www\.)?google\.com/i.test(body)) throw new Error('官网将当前访问重定向到站外，请打开官网检查访问限制；这不是下载额度不足');
     // Match actual response callbacks, never the error dictionary in a full page.
     // Full catalogue/detail pages contain dormant display_codeinfo("e430")
     // branches. Only compact action responses represent an error callback.
@@ -124,16 +133,21 @@
       try {
         var matches = listing(1, title, []).items;
         var normalized = text(title);
-        var item = matches.filter(function (m) { return text(m.title) === normalized; })[0] || matches[0];
+        var item = matches.filter(function (m) { return text(m.title) === normalized; })[0];
         if (item && !seen[item.id]) { seen[item.id] = true; output.push(item); }
-      } catch (_) {}
+      } catch (error) { throw error; }
     });
     return output;
   }
   function detail(manga) {
     var body = request(manga.url), doc = parseHTML(body, BASE);
     var id = variable(body, 'bookid');
-    if (!/^\d+$/.test(id)) throw new Error('未找到官网作品编号');
+    if (!/^\d+$/.test(id)) {
+      var input = doc.selectFirst('input[name="bookid"], input[name="book_id"], #bookid');
+      id = input ? str(input.attr('value')) : '';
+    }
+    if (!/^\d+$/.test(id)) id = match(body, /(?:book_score|book_comm_list|book_comm)\.php\?b=(\d+)(?:&|["'])/);
+    if (!/^\d+$/.test(id)) throw new Error('官网作品页面未返回可识别的作品编号，请刷新详情；若仍失败，请检查官网是否打开了登录或验证页面');
     var titleNode = doc.selectFirst('.text_bglight_big'), authorBox = doc.selectFirst('td.author');
     var summary = authorBox ? authorBox.text().replace(/\s+/g, ' ').trim() : '';
     var title = titleNode ? titleNode.text() : manga.title;
@@ -175,32 +189,43 @@
       ratingScale: '10',
       userRatingScale: '5',
       isRead: (function () { var link = doc.selectFirst('a[title="取消已讀"] img'); return link && !/display\s*:\s*none/i.test(link.attr('style') || '') ? '1' : '0'; })(),
-      isFavorited: Number(variable(body, 'can_do_fav')) === 0 ? '1' : '0',
+      isFavorited: variable(body, 'can_do_fav') === '0' ? '1' : '0',
       isKoobSubscribed: visible('ftokoob_button_no') ? '1' : '0'
     });
     var description = match(body, /getElementById\("div_desc_content"\)\.innerHTML\s*=\s*"((?:\\.|[^"\\])*)"/);
     var related = [], recommendations = [];
     var dataKey = match(body, /data_book\(\s*["']([a-z0-9]+)["']\s*\)/i);
-    if (manga.info && manga.info.loadRelated === '1' && Number(variable(body, 'uin')) > 0 && dataKey) {
+    if (manga.info && manga.info.loadRelated === '1') {
       try {
+        if (!(Number(variable(body, 'uin')) > 0)) throw new Error('登录 Kmoe 后可读取官网相关推荐');
+        if (!dataKey) throw new Error('官网相关推荐接口未出现在当前作品页面');
         var bookData = json('/data_book.php?h=' + encodeURIComponent(dataKey));
         if (bookData.linkbook) {
-          var linked = str(bookData.linkbook).split(','), linkedTitles = [];
-          for (var li = 1; li < linked.length; li += 2) linkedTitles.push(linked[li]);
-          related = resolveTitleCards(linkedTitles, 4);
+          var linked = str(bookData.linkbook).split(',');
+          for (var li = 0; li + 1 < linked.length && related.length < 4; li += 2) {
+            if (!/^[a-z0-9]+$/i.test(linked[li])) continue;
+            var ref = bookRef(linked[li]); ref.title = text(linked[li + 1]);
+            var item = detail(ref).manga;
+            if (!related.some(function (m) { return m.id === item.id; })) related.push(item);
+          }
         }
         if (Number(bookData.needrec) >= 1 && bookData.hash && bookData.bookname) {
           var recData = json('/data_recbook.php?h=' + encodeURIComponent(bookData.hash) + '&n=' + encodeURIComponent(bookData.bookname));
           recommendations = resolveTitleCards(Array.isArray(recData.recbook) ? recData.recbook : [], 4);
         }
-      } catch (_) {}
+        info.relatedStatus = 'loaded';
+      } catch (error) { info.relatedStatus = 'failed'; info.relatedError = str(error.message || error); }
     }
-    return { html: body, manga: Object.assign({}, manga, { title: title, author: author || manga.author, description: text(description), genres: categoryValues, tagGroups: categoryValues.length ? [{id:'categories',title:'分类',values:categoryValues}] : [], relatedMangas: related, recommendations: recommendations, status: variable(body, 'bookstatus') === '完結' ? 'completed' : 'ongoing', info: info, highResolutionCoverURL: manga.coverURL }) };
+    var cover = doc.selectFirst('img.img_book, img#book_cover, img[src*="/book/"]');
+    if (!cover) cover = doc.selectFirst('td.author img') || doc.selectFirst('img[width="200"]');
+    var metadataCover = doc.selectFirst('meta[property="og:image"], meta[name="og:image"]');
+    var coverURL = manga.coverURL || (cover ? cover.attr('src') : metadataCover ? metadataCover.attr('content') : null);
+    return { html: body, manga: Object.assign({}, manga, { coverURL: coverURL, title: title, author: author || manga.author, description: text(description), genres: categoryValues, tagGroups: categoryValues.length ? [{id:'categories',title:'分类',values:categoryValues}] : [], relatedMangas: related, recommendations: recommendations, status: variable(body, 'bookstatus') === '完結' ? 'completed' : 'ongoing', info: info, highResolutionCoverURL: coverURL }) };
   }
   function volumes(manga) {
     var d = detail(manga), h = d.html;
     if (!(Number(variable(h, 'uin')) > 0)) throw new Error(errors.e401);
-    var key = match(h, /data_book\(\s*"([a-z0-9]+)"\s*\)/i);
+    var key = match(h, /data_book\(\s*["']([a-z0-9]+)["']\s*\)/i);
     if (!key) throw new Error('官网卷列表接口已变化');
     var data = json('/data_book.php?h=' + encodeURIComponent(key));
     if (!Array.isArray(data.voldata)) throw new Error('官网未返回卷列表');
@@ -238,7 +263,7 @@
       { id: 'quota', title: '额度与重置规则', value: node ? node.text().replace(/\s+/g, ' ').trim() : '请在官网账号页面查看' }
     ] }], message: '每个账号独立计费；当前剩余额度以下载时官网结果为准。' };
   }
-  var tools = { overview: ['/my.php', '账号设置'], records: ['/myrecord.php', '下载与推送记录'], subscriptions: ['/myfollow.php', '收藏与订阅'], devices: ['/mydevice.php', '推送设备'], activation: ['/myphone.php', '账号激活'], comments: ['/mybookcomm.php', '我的书评'], uploads: ['/mycomic.php', '我的上传'], vip: ['/donate.php', 'VIP'], profile: ['/my.php', '个人资料与偏好'] };
+  var tools = { overview: ['/my.php', '账号与额度'], records: ['/myrecord.php', '官网下载与推送记录'], subscriptions: ['/myfollow.php', '站点收藏与订阅'], devices: ['/mydevice.php', 'Kindle 推送设置'], activation: ['/myphone.php', 'KOOBONE 激活与等级'], comments: ['/mybookcomm.php', '账号相关书评'], uploads: ['/mycomic.php', '我的上传'], vip: ['/donate.php', 'VIP'], profile: ['/my.php', '资料与官网偏好'] };
   function field(id, title, value, options) { return { id: id, title: title, value: str(value), options: options || null, multiline: id === 'body' }; }
   function option(id, title) { return { id: str(id), title: title }; }
   function action(id, title, fields, confirmation) { return { id: id, title: title, fields: fields, confirmation: confirmation || null }; }
@@ -251,12 +276,17 @@
     return selected ? selected.attr('value') : first ? first.attr('value') : '';
   }
   function tool(kind) {
+    if (kind.indexOf('category:') === 0) {
+      var slug = kind.slice(9), d = detail(bookRef(slug));
+      if (!(Number(variable(d.html, 'uin')) > 0)) throw new Error(errors.e401);
+      return { isSupported: true, title: '分类投票', sections: [], links: [], actions: [categoryAction(slug)] };
+    }
     if (kind.indexOf('comments:') === 0) { var parts = kind.split(':'); return commentsTool(parts[1],parts[2],parts[3]); }
     if (kind.indexOf('book:') === 0) return bookTool(kind.slice(5));
     var t = tools[kind]; if (!t) throw new Error('未知账号功能');
     var body = request(t[0]), doc = parseHTML(body, BASE), sections = [], actions = [];
-    if (kind === 'overview' || kind === 'profile') {
-      sections = overview().sections;
+    if (kind === 'overview') sections = overview().sections;
+    else if (kind === 'profile') {
       var nickname = doc.selectFirst('input[name=nickname]');
       actions.push(action('profile:nickname', '保存昵称', [field('nickname', '昵称', nickname ? nickname.attr('value') : '')]));
       [['10', 'sel_uhometab', '主页默认分类'], ['1', 'sel_deffile', '漫画默认分页']].forEach(function (d) {
@@ -274,7 +304,7 @@
       });
       sections = [{ id: 'content', title: t[1], metrics: metrics }];
     }
-    return { isSupported: true, title: t[1], sections: sections, actions: actions, links: Object.keys(tools).map(function (id) { return { id: id, title: tools[id][1], url: BASE + tools[id][0] }; }), message: '数据来自当前登录账号。官网保存成功后会重新读取页面。' };
+    return { isSupported: true, title: t[1], sections: sections, actions: actions, links: [{ id: kind, title: '在官网管理' + t[1], url: BASE + t[0] }], message: actions.length || kind === 'overview' ? '数据来自当前登录账号。' : '此处显示官网记录摘要；完整管理、验证及分页可打开对应官网页面。' };
   }
   function bookRef(slug) {
     if (!/^[a-z0-9]+$/i.test(slug)) throw new Error('无效作品编号');
@@ -300,16 +330,19 @@
     });
     return { comments: comments, hasNextPage: pagination.length > 0 && Number(pagination[0][1]) > (page || 1), total: pagination.length ? Number(pagination[0][0]) : null };
   }
-  function bookTool(slug) {
+  function categoryAction(slug) {
+    return action('book:' + slug + ':category', '提交分类投票', [1,2,3].map(function(n) {return field('tag_cate_' + n, '分类 ' + n, '', [option('', '不选择')].concat(categories.map(function(c) { return option(c,c); })));}));
+  }
+  function bookTool(slug, includeVolumes) {
     var d = detail(bookRef(slug)), h = d.html, actions = [], prefix = 'book:' + slug + ':';
     if (!(Number(variable(h, 'uin')) > 0)) throw new Error(errors.e401);
-    actions.push(action(prefix + 'favorite', '更新官网收藏', [field('value', '收藏', Number(variable(h, 'can_do_fav')) === 0 ? '0' : '1', [option('1', '收藏'), option('0', '取消收藏')])]));
+    actions.push(action(prefix + 'favorite', '更新官网收藏', [field('value', '收藏', variable(h, 'can_do_fav') === '0' ? '0' : '1', [option('1', '收藏'), option('0', '取消收藏')])]));
     actions.push(action(prefix + 'follow', '更新官网订阅', [field('target', '推送目标', '9', [option('9', 'KOOBONE'), option('1', 'Kindle')]), field('value', '订阅', d.manga.info.isKoobSubscribed === '1' ? '0' : '1', [option('1', '订阅'), option('0', '取消订阅')])], '官网订阅会在作品更新时自动推送到所选设备。'));
     actions.push(action(prefix + 'rating', '提交评分', [field('score', '评分', '5', [1,2,3,4,5].map(function (n) { return option(n, n + ' 星'); }))]));
     actions.push(action(prefix + 'read', '更新已读状态', [field('value', '已读', '1', [option('1', '设为已读'), option('0', '取消已读')])], '此处同步官网已读标记，不代表文件已下载到本机。'));
     actions.push(action(prefix + 'review', '发表书评', [field('body', '书评正文', ''), field('score', '评分', '5', [1,2,3,4,5].map(function (n) { return option(n, n + ' 星'); })), field('spoiler', '包含剧透', '0', [option('0', '否'), option('1', '是')])], '将公开发布到 Kmoe 官网，官网要求两篇书评间隔至少 10 分钟。'));
-    actions.push(action(prefix + 'category', '提交分类投票', [1,2,3].map(function(n) {return field('tag_cate_' + n, '分类 ' + n, '', [option('', '不选择')].concat(categories.map(function(c) { return option(c,c); })));})));
-    var vol = volumes(d.manga).rows;
+    actions.push(categoryAction(slug));
+    var vol = includeVolumes ? volumes(d.manga).rows : [];
     
     // Push targets are exposed by the book's official form; do not invent a bound device.
     var targets = [option('2', 'KOOBONE（需已激活）')];
@@ -396,16 +429,23 @@
       [1,2,3].forEach(function(n){var key='tag_cate_'+n,value=str(payload[key]);if(value && categories.indexOf(value)<0)throw new Error('无效分类');fields[key]=value;});
       request('/tag_cate_do.php',fields);
     } else if (op === 'push') {
-      var available = bookTool(parts[1]).actions.filter(function(a){return a.id===kind;})[0];
+      var available = bookTool(parts[1], true).actions.filter(function(a){return a.id===kind;})[0];
       if (!available || !available.fields.every(function(f){return f.options.some(function(o){return o.id===payload[f.id];});})) throw new Error('官网当前没有此卷或绑定目标');
       request('/book_push.php',{push_bookid:id,push_vol_list:payload.volume,pushto:payload.target});
     } else throw new Error('未开放的官网操作');
-    var result = bookTool(parts[1]); result.message='已提交官网并重新读取作品状态；请核对当前显示。'; return result;
+    // A successful write must not be reported as a failed write because an
+    // unrelated volume request or subsequent readback failed. Never resend it.
+    try {
+      var result = op === 'category' ? tool('category:' + parts[1]) : bookTool(parts[1]);
+      result.message = '已提交官网并重新读取作品状态'; return result;
+    } catch (error) {
+      return { isSupported: true, title: '已提交，状态待刷新', sections: [], actions: [], links: [{ id: 'book', title: '在官网核对作品状态', url: manga.url }], message: '官网已收到操作，但状态刷新失败：' + str(error.message || error) + '。请刷新状态，无需重复提交。' };
+    }
   }
   function favorite(manga) {
     var h = detail(manga).html;
     if (!(Number(variable(h, 'uin')) > 0)) return { isSupported: true, isFavorited: false, categories: [], category: 0, message: '登录后可同步官网收藏' };
-    return { isSupported: true, isFavorited: Number(variable(h, 'can_do_fav')) === 0, categories: [], category: 0 };
+    return { isSupported: true, isFavorited: variable(h, 'can_do_fav') === '0', categories: [], category: 0 };
   }
   function follow(manga, type, on) {
     var d = detail(manga);

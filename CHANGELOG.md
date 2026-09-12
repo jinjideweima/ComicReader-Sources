@@ -1,3 +1,10 @@
+## Kmoe 1.2.2 — 2026-09-12
+
+- Accept official literal and form book identifiers; distinguish empty, login and off-site responses.
+- Decouple book state changes from volume discovery and preserve submitted-but-unconfirmed results.
+- Use official related-book links, extract their covers, and expose recommendation failures for retry.
+- Separate account settings from book-specific category voting.
+
 # Changelog
 
 Each source uses its own semantic `version` in `index.json`. Script changes
