@@ -98,6 +98,14 @@
     }
     return result;
   }
+  function coverBadges(language, status) {
+    var labels = [];
+    if (language === '日語') labels.push('日語');
+    if (language === '英文') labels.push('英文');
+    if (status === '完結') labels.push('完結');
+    if (status === '停更') labels.push('停更');
+    return labels.join('|');
+  }
   function cards(body) {
     var seen = {}, result = [];
     quotedArgs(body, 'disp_divinfo').forEach(function (a) {
@@ -106,7 +114,7 @@
       var link = a[offset];
       if (!/^https:\/\/kzo\.moe\/c\/[a-z0-9]+\.htm$/i.test(link || '') || seen[link]) return;
       seen[link] = true;
-      result.push({ id: match(link, /\/c\/([a-z0-9]+)\.htm/i), url: link, title: text(a[offset + 8]), coverURL: a[offset + 1], author: text(a[offset + 9]), genres: [], status: 'unknown', info: { rating: a[offset + 7], delivery: 'downloadOnly' } });
+      result.push({ id: match(link, /\/c\/([a-z0-9]+)\.htm/i), url: link, title: text(a[offset + 8]), coverURL: a[offset + 1], author: text(a[offset + 9]), genres: [], status: 'unknown', info: { rating: a[offset + 7], delivery: 'downloadOnly', coverBadges: [a[offset+3] === '' ? '日語' : '', a[offset+4] === '' ? '英文' : '', a[offset+5] === '' ? '完結' : '', a[offset+6] === '' ? '停更' : ''].filter(Boolean).join('|') } });
     });
     return result;
   }
@@ -145,7 +153,7 @@
       items.push({ id: id, url: link, title: text(book.name), coverURL: str(book.url_cover),
         author: text(book.author), genres: [],
         status: book.status === '完結' ? 'completed' : book.status === '連載' ? 'ongoing' : 'unknown',
-        info: { rating: str(book.score), delivery: 'downloadOnly', language: str(book.lang),
+        info: { rating: str(book.score), delivery: 'downloadOnly', language: str(book.lang), coverBadges: coverBadges(str(book.lang), str(book.status)),
           update: str(book.lastupdate), latestVolume: str(book.newvol) } });
     });
     var current = Math.max(1, Number(data.nowpage)), total = Math.max(0, Number(data.totalpage));
@@ -247,6 +255,7 @@
       isFavorited: variable(body, 'can_do_fav') === '0' ? '1' : '0',
       isKoobSubscribed: visible('ftokoob_button_no') ? '1' : '0'
     });
+    info.coverBadges = coverBadges(info.language, variable(body, 'bookstatus'));
     var description = match(body, /getElementById\("div_desc_content"\)\.innerHTML\s*=\s*"((?:\\.|[^"\\])*)"/);
     var related = [], recommendations = [];
     var dataKey = match(body, /data_book\(\s*["']([a-z0-9]+)["']\s*\)/i);
