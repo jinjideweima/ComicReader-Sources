@@ -100,7 +100,7 @@
   }
   function coverBadges(language, status) {
     var labels = [];
-    if (language === '日語') labels.push('日語');
+    if (language === '日語' || language === '日文') labels.push('日語');
     if (language === '英文') labels.push('英文');
     if (status === '完結') labels.push('完結');
     if (status === '停更') labels.push('停更');
