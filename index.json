@@ -1098,14 +1098,14 @@
       "publisher" : "ComicReader Sources Contributors",
       "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
       "scriptURL" : "sources/kmoe/source.js",
-      "sha256" : "28fa40baaff9c3095d92c8cc11ed3737b87c60881dbc940d091a938f714789d3",
+      "sha256" : "1813443e89ab53350e7352f07d2aef019a985a2539bf6cead3292d033c0b3277",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "PzW+iIgb0o7AekbTOKbaodvN9O7ytyab7+Nb7SVVb/XvBMr+WoyfXOHViQ30Xf4n30q16V0fwJSjB6omjNXDDA=="
+        "value" : "49IqV+bylmV/cbXBioYG5Kefl9XDjWaJ2Ckc5/v1XwJ1uTOixfml/gNZj3yXNbM4ot7QLQkUjRUURHVGo6boBQ=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/kmoe/source.js",
-      "version" : "1.2.4"
+      "version" : "1.2.5"
     }
   ]
 }

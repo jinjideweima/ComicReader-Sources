@@ -240,7 +240,9 @@
       rating: match(scoreText, /(\d+(?:\.\d+)?)/),
       ratingCount: match(scoreText, /(\d+)\s*人評價/),
       ratingScale: '10',
+      userRating: variable(body, 'my_score') || match(body, /book_score\.php\?b=[^&]+&s=([1-5])&(?:amp;)?t=1/),
       userRatingScale: '5',
+      websiteAuthenticated: Number(variable(body, 'uin')) > 0 ? '1' : '0',
       isRead: (function () { var link = doc.selectFirst('a[title="取消已讀"] img'); return link && !/display\s*:\s*none/i.test(link.attr('style') || '') ? '1' : '0'; })(),
       isFavorited: variable(body, 'can_do_fav') === '0' ? '1' : '0',
       isKoobSubscribed: visible('ftokoob_button_no') ? '1' : '0'
@@ -303,7 +305,7 @@
     var d = detail(manga), parts = mode.split(':');
     var data = json('/getdownurl.php?b=' + d.manga.info.bookID + '&v=' + parts[0] + '&mobi=' + parts[1] + '&vip=' + parts[2] + '&json=1');
     if (!data.url || !/^https:\/\//i.test(data.url)) throw new Error(errors[data.code] || text(data.message || data.msg || '官网未生成下载链接'));
-    return { isSupported: true, options: [], downloadURL: data.url, message: text(data.disp || data.name), fileName: str(data.name), fileExtension: parts[1] === '2' ? 'epub' : 'mobi' };
+    return { isSupported: true, options: [], downloadURL: data.url, downloadHeaders: {'Referer': d.manga.url, 'X-KM-FROM': 'KMOE/3.0.0(WEB) FETCH ' + d.manga.url.slice(BASE.length)}, message: text(data.disp || data.name), fileName: str(data.name), fileExtension: parts[1] === '2' ? 'epub' : 'mobi' };
   }
   function overview() {
     var body = request('/my.php'), doc = parseHTML(body, BASE);
@@ -473,7 +475,19 @@
     } else if (op === 'rating' || op === 'read') {
       if (op === 'rating' && !/^[1-5]$/.test(payload.score)) throw new Error('评分需为 1 至 5 星');
       if (op === 'read' && !/^[01]$/.test(payload.value)) throw new Error('无效已读状态');
-      request('/book_score.php?b='+id+'&s='+(op==='rating'?payload.score:'0')+'&t='+(op==='read'?payload.value:'-1'));
+      var existingScore = d.manga.info.userRating;
+      var score = op === 'rating' ? payload.score : (payload.score || existingScore);
+      if (op === 'read' && payload.value === '1' && !/^[1-5]$/.test(str(score))) throw new Error('需要评价此书后才能标为读过，请先选择 1 至 5 星');
+      if (op === 'read' && payload.value === '0') score = existingScore || '';
+      request('/book_score.php?b='+id+'&s='+encodeURIComponent(score || '')+'&t='+(op==='read'?payload.value:'-1'));
+      if (op === 'read') {
+        try {
+          var readState = detail(manga).manga.info.isRead;
+        } catch (error) {
+          return {isSupported:true,title:'已提交，状态待刷新',sections:[],actions:[],links:[],message:'已提交读过状态，但官网回读失败，请刷新核对，不要重复提交。'};
+        }
+        if (readState !== payload.value) throw new Error('官网未确认读过状态，请检查评分与登录状态');
+      }
     } else if (op === 'review') {
       if (str(payload.body).trim().length < 20 || !/^[1-5]$/.test(payload.score)) throw new Error('请填写至少二十个字的书评并选择评分');
       request('/book_comm_do.php',{bookid:id,comm_content:payload.body,comm_spoiler:payload.spoiler==='1'?'1':'0',book_score:payload.score});
@@ -509,7 +523,7 @@
   function ratingState(manga) {
     var d = detail(manga), node = parseHTML(d.html, BASE).selectFirst('.book_score');
     var value = node ? node.text().replace(/\s+/g, ' ') : '';
-    return { isSupported: true, average: d.manga.info.rating || null, count: d.manga.info.ratingCount || null, userRating: Number(variable(d.html, 'my_score')) || null, message: '评分与评价人数来自 Kmoe 官网' };
+    return { isSupported: true, average: d.manga.info.rating || null, count: d.manga.info.ratingCount || null, userRating: Number(d.manga.info.userRating) || null, message: '评分与评价人数来自 Kmoe 官网' };
   }
   function setRating(manga, rating) {
     var d = detail(manga), value = Math.round(Number(rating));
@@ -522,7 +536,7 @@
     var d = detail(manga), value = str(body).trim();
     if (!(Number(variable(d.html, 'uin')) > 0)) throw new Error(errors.e401);
     if (value.length < 20) throw new Error('Kmoe 书评至少需要二十个字；评分与剧透设置可在“官网功能”中选择');
-    request('/book_comm_do.php', {bookid:d.manga.info.bookID,comm_content:value,comm_spoiler:'0',book_score:'5'});
+    throw new Error('请通过评分与评论表单选择 1 至 5 星后发送，不会自动代选五星');
     return {isSupported:true,didSubmit:true,message:'书评已发布到 Kmoe 官网',comments:commentsPage(manga,1,'latest').comments};
   }
   globalThis.__source = {
@@ -551,7 +565,7 @@
         return {isSupported:true,didSubmit:true,message:'回复已发布到 Kmoe 官网',comments:commentsPage(m,1,'hot').comments};
       }
       if (value.length < 20) throw new Error('Kmoe 书评至少需要二十个字');
-      request('/book_comm_do.php', {bookid:d.manga.info.bookID,comm_content:value,comm_spoiler:spoiler?'1':'0',book_score:'5'});
+      throw new Error('请通过评分与评论表单选择 1 至 5 星后发送，不会自动代选五星');
       return {isSupported:true,didSubmit:true,message:'书评已发布到 Kmoe 官网',comments:commentsPage(m,1,'latest').comments};
     },
     getFavoriteState: favorite,
