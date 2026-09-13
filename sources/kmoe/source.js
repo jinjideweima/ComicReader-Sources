@@ -180,17 +180,17 @@
     var re = new RegExp('(?:' + label + ')\\s*[：:]\\s*([\\s\\S]*?)' + (next ? '(?=(?:' + next + ')\\s*[：:])' : '$'));
     return text(match(source, re));
   }
-  function resolveTitleCards(titles, limit) {
-    var output = [], seen = {};
-    (titles || []).slice(0, limit || 6).forEach(function (title) {
-      try {
-        var matches = listing(1, title, []).items;
-        var normalized = text(title);
-        var item = matches.filter(function (m) { return text(m.title) === normalized; })[0];
-        if (item && !seen[item.id]) { seen[item.id] = true; output.push(item); }
-      } catch (error) { throw error; }
+  function resolveTitleCards(titles) {
+    return (titles || []).map(function (title, index) {
+      var name = text(title), item;
+      try { item = listing(1, name, []).items.filter(function (m) { return text(m.title) === name; })[0]; } catch (_) {}
+      // Preserve every official recommendation even when cover resolution fails.
+      return item ? Object.assign({}, item, { title: name }) : {
+        id: 'recommendation-' + index + '-' + name, title: name, genres: [], status: 'unknown',
+        url: BASE + '/list.php?s=' + encodeURIComponent(name),
+        info: { recommendationSearch: name }
+      };
     });
-    return output;
   }
   function detail(manga) {
     var body = request(manga.url), doc = parseHTML(body, BASE);
@@ -257,7 +257,7 @@
         var bookData = json('/data_book.php?h=' + encodeURIComponent(dataKey));
         if (bookData.linkbook) {
           var linked = str(bookData.linkbook).split(',');
-          for (var li = 0; li + 1 < linked.length && related.length < 4; li += 2) {
+          for (var li = 0; li + 1 < linked.length && related.length < 100; li += 2) {
             if (!/^[a-z0-9]+$/i.test(linked[li])) continue;
             var ref = bookRef(linked[li]); ref.title = text(linked[li + 1]);
             var item = detail(ref).manga;
@@ -266,7 +266,7 @@
         }
         if (Number(bookData.needrec) >= 1 && bookData.hash && bookData.bookname) {
           var recData = json('/data_recbook.php?h=' + encodeURIComponent(bookData.hash) + '&n=' + encodeURIComponent(bookData.bookname));
-          recommendations = resolveTitleCards(Array.isArray(recData.recbook) ? recData.recbook : [], 4);
+          recommendations = resolveTitleCards(Array.isArray(recData.recbook) ? recData.recbook : []);
         }
         info.relatedStatus = 'loaded';
       } catch (error) { info.relatedStatus = 'failed'; info.relatedError = str(error.message || error); }
@@ -488,6 +488,12 @@
         }
         if (readState !== payload.value) throw new Error('官网未确认读过状态，请检查评分与登录状态');
       }
+    } else if (op === 'report') {
+      if (['1','2','9'].indexOf(str(payload.reason)) < 0) throw new Error('请选择官网举报原因');
+      if (!str(payload.title).trim() || !str(payload.body).trim()) throw new Error('请填写举报标题和具体说明');
+      var reply = request('/book_comm_do.php', { bookid:id, commid:'0', type:'2', reporttype:payload.reason, comm_title:payload.title, comm_content:payload.body, comm_spoiler:payload.spoiler==='1'?'1':'0' });
+      if (!/(?:c102|提交成功)/.test(reply)) throw new Error('官网未返回明确的举报提交确认，请勿重复提交，请稍后核对');
+      return {isSupported:true,title:'举报已提交',message:'官网已确认收到作品举报',sections:[],actions:[],links:[]};
     } else if (op === 'review') {
       if (str(payload.body).trim().length < 20 || !/^[1-5]$/.test(payload.score)) throw new Error('请填写至少二十个字的书评并选择评分');
       request('/book_comm_do.php',{bookid:id,comm_content:payload.body,comm_spoiler:payload.spoiler==='1'?'1':'0',book_score:payload.score});
