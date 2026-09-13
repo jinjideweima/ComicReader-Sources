@@ -189,15 +189,10 @@
     return text(match(source, re));
   }
   function resolveTitleCards(titles) {
-    return (titles || []).map(function (title, index) {
-      var name = text(title), item;
-      try { item = listing(1, name, []).items.filter(function (m) { return text(m.title) === name; })[0]; } catch (_) {}
-      // Preserve every official recommendation even when cover resolution fails.
-      return item ? Object.assign({}, item, { title: name }) : {
-        id: 'recommendation-' + index + '-' + name, title: name, genres: [], status: 'unknown',
-        url: BASE + '/list.php?s=' + encodeURIComponent(name),
-        info: { recommendationSearch: name }
-      };
+    return titles.map(function(title,index) {
+      var name=text(title);
+      return {id:'recommendation-'+index+'-'+name,title:name,genres:[],status:'unknown',
+        url:BASE+'/list.php?s='+encodeURIComponent(name),info:{recommendationSearch:name}};
     });
   }
   function detail(manga) {
@@ -269,7 +264,7 @@
           for (var li = 0; li + 1 < linked.length && related.length < 100; li += 2) {
             if (!/^[a-z0-9]+$/i.test(linked[li])) continue;
             var ref = bookRef(linked[li]); ref.title = text(linked[li + 1]);
-            var item = detail(ref).manga;
+            var item = ref;
             if (!related.some(function (m) { return m.id === item.id; })) related.push(item);
           }
         }
@@ -346,6 +341,7 @@
       return { isSupported: true, title: '分类投票', sections: [], links: [], actions: [categoryAction(slug)] };
     }
     if (kind.indexOf('comments:') === 0) { var parts = kind.split(':'); return commentsTool(parts[1],parts[2],parts[3]); }
+    if (kind.indexOf('push:') === 0) return bookTool(kind.slice(5), true);
     if (kind.indexOf('book:') === 0) return bookTool(kind.slice(5));
     var t = tools[kind]; if (!t) throw new Error('未知账号功能');
     var body = request(t[0]), doc = parseHTML(body, BASE), sections = [], actions = [];
@@ -372,7 +368,7 @@
   }
   function bookRef(slug) {
     if (!/^[a-z0-9]+$/i.test(slug)) throw new Error('无效作品编号');
-    return { id: slug, url: BASE + '/c/' + slug + '.htm', title: '' };
+    return { id: slug, url: BASE + '/c/' + slug + '.htm', title: '', genres: [], status: 'unknown' };
   }
   function commentsPage(manga, page, sort) {
     var d = detail(manga), order = sort === 'latest' ? 2 : sort === 'reply' ? 3 : 1;
@@ -411,9 +407,18 @@
     // Push targets are exposed by the book's official form; do not invent a bound device.
     var targets = [option('2', 'KOOBONE（需已激活）')];
     if (variable(h, 'device_mailto')) targets.push(option('0','官网已验证 Kindle'));
-    if (targets.length && vol.length) actions.push(action(prefix + 'push', '推送所选卷', [field('volume','卷',str(vol[0][0]),vol.map(function(r){return option(r[0],text(r[3])+' · '+text(r[5]));})),field('target','官网已绑定目标',targets[0].id,targets)], '将通过官网推送此卷并按官网规则扣除额度。'));
-    return { isSupported: true, title: d.manga.title, sections: [{id:'quota',title:'官网状态',metrics:[{id:'remaining',title:'剩余额度',value:variable(h,'quota_now')+' M'}]}], actions: actions, links: [{id:'book',title:'官网作品详情与全部书评',url:d.manga.url}], message: '收藏、订阅、评分、已读和推送均同步官网。' };
+    var pushRows=vol.filter(function(r){return pushSize(r)>0;});
+    if(includeVolumes) actions=[action(prefix+'push','推送所选卷',[
+      field('volume','卷','',pushRows.map(function(r){return option(r[0],text(r[3])+' · '+text(r[5]));})),
+      field('target','目标','2',targets)],'使用官网额度；推送登记不代表已送达。')];
+    var sections=[{id:'quota',title:'官网状态',metrics:[{id:'remaining',title:'剩余额度',value:variable(h,'quota_now')+' M'},
+      {id:'kindle',title:'Kindle',value:variable(h,'device_mailto')?'官网地址已验证':'尚未验证推送地址'},
+      {id:'koobone',title:'KOOBONE',value:'激活状态及剩余空间由官网在提交时校验'}]}];
+    if(includeVolumes) sections.push({id:'pushSizes',title:'推送大小',metrics:pushRows.map(function(r){return {id:str(r[0]),title:text(r[5]),value:str(pushSize(r))};})});
+    return {isSupported:true,title:d.manga.title,sections:sections,actions:actions,links:[],message:'通过官网登记推送，使用官网账号额度。未制作完成的卷暂不可选。'};
   }
+  function pushSize(r) {return parseInt(r[10],10)>0 ? Number(r[10]) : Math.max(0,Number(r[11])||0);}
+
   function commentsTool(slug, page, sort) {
     page = Math.max(1, Number(page) || 1); sort = ['hot','latest','reply'].indexOf(sort)>=0 ? sort : 'hot';
     var d = detail(bookRef(slug)), order = sort === 'latest' ? 2 : sort === 'reply' ? 3 : 1;
@@ -511,9 +516,22 @@
       [1,2,3].forEach(function(n){var key='tag_cate_'+n,value=str(payload[key]);if(value && categories.indexOf(value)<0)throw new Error('无效分类');fields[key]=value;});
       request('/tag_cate_do.php',fields);
     } else if (op === 'push') {
-      var available = bookTool(parts[1], true).actions.filter(function(a){return a.id===kind;})[0];
-      if (!available || !available.fields.every(function(f){return f.options.some(function(o){return o.id===payload[f.id];});})) throw new Error('官网当前没有此卷或绑定目标');
-      request('/book_push.php',{push_bookid:id,push_vol_list:payload.volume,pushto:payload.target});
+      var state=bookTool(parts[1],true), available=state.actions[0];
+      var selected=str(payload.volume).split(',').filter(function(x){return x.length>0;});
+      if(!available || !selected.length || selected.some(function(v,i){return !/^\d+$/.test(v)||selected.indexOf(v)!==i||!available.fields[0].options.some(function(o){return o.id===v;});}) || !available.fields[1].options.some(function(o){return o.id===str(payload.target);})) throw new Error('官网当前没有此卷或已验证目标，请刷新推送窗口');
+      var sizes=state.sections[1].metrics, sum=0;
+      selected.forEach(function(v){sum+=parseInt(sizes.filter(function(m){return m.id===v;})[0].value,10);});
+      var quota=parseInt(state.sections[0].metrics[0].value,10);
+      if(!(sum<=quota || (selected.length===1&&quota>0))) throw new Error('官网剩余额度不足以登记所选卷');
+      var reply;
+      try {reply=request('/book_push.php',{push_bookid:id,push_vol_list:selected.join(','),pushto:payload.target});}
+      catch(error){throw new Error('推送未获得成功确认：'+str(error.message||error)+'。请先在官网核对登记记录，勿直接重复推送。');}
+      var code=match(reply,/(?:display_codeinfo|disp_codeinfo)\(\s*["'](m100|m101|m104)["']/);
+      var messages={m100:'推送已登记，官网将陆续发送；此状态不代表已送达。',m101:'部分推送登记失败，可能额度不足或文件超过限制；请核对官网记录，不要整批重发。',m104:'存在 15 分钟内的重复推送，未完全登记；请核对官网记录。'};
+      if(!messages[code]) throw new Error('推送结果尚未确认，请先核对官网记录；不要重复提交。');
+      var sections=[];
+      try { sections=bookTool(parts[1]).sections; }catch(error){}
+      return {isSupported:true,title:code==='m100'?'推送已登记':'请核对推送结果',message:messages[code]+(sections.length?'':' 额度刷新失败，请稍后重新打开查看。'),sections:sections,actions:[],links:[]};
     } else throw new Error('未开放的官网操作');
     // A successful write must not be reported as a failed write because an
     // unrelated volume request or subsequent readback failed. Never resend it.
