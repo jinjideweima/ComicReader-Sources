@@ -20,6 +20,10 @@
   navigation and `persistentWebLogin` for a publisher-isolated WebKit store;
 - optional `resources` entries with a safe `id`, repository-relative `url`,
   SHA-256, resource-specific license, and optional attribution notice;
+- optional `iconURL` (repository-relative or absolute HTTPS) for the source's
+  icon: a square PNG, JPEG, GIF, WebP or ICO up to 1 MB, ideally 256 × 256
+  and full-bleed. ComicReader downloads it next to the installed plug-in and
+  re-reads it from the index, so an icon can change without a new version;
 - Ed25519 v2 signature over deterministic sorted-key JSON of the complete
   manifest (excluding the signature itself), prefixed with
   `ComicReader.SourceManifest.ed25519-v2 + NUL`.

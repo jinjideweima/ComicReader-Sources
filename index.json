@@ -95,6 +95,7 @@
           "title" : "账号中心"
         }
       ],
+      "iconURL" : "icons/wnacg.png",
       "id" : "wnacg",
       "imageRequestHeaders" : {
         "Referer" : "https://www.wnacg.com/",
@@ -168,7 +169,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "wpslB9mrjG7Q23P4gQObhrzDoRgYBxAKQGFfQ2LVTAUfCBOHfDNHxxuJ7fgzMcrolYnUXaut5Pzt55/1+IwEBA=="
+        "value" : "+YGk44mJadJ+ST1owtfxjjV2unFLhol1KJLuoktdKFbAmXDrXlS0PQEIXAJRcIz9WJb/tJJPc6zMWNVvjL5UCg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/wnacg/source.js",
       "version" : "1.1.2"
@@ -273,6 +274,7 @@
           "title" : "账户资料"
         }
       ],
+      "iconURL" : "icons/baozi.png",
       "id" : "baozi",
       "imageRequestHeaders" : {
         "Referer" : "https://www.twmanga.com/",
@@ -316,7 +318,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "XR2FG3mgdnxtjnbLmJcZIhMTrkwJ1YkkGnBHFczLw+p7nah97mK/9tGeRaFIZpVtJwg0aKJPcHVqlObje96ECA=="
+        "value" : "gfO8nIyvFlNausQ7Np9cbsTejruyYHdoVOZSAWuEfs+hukMLOyk9R/3PvM+VfOs9J+o6IT1+3kkxH2HxDtnzCw=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
       "version" : "1.1.3"
@@ -420,6 +422,7 @@
           "title" : "账户资料与额度"
         }
       ],
+      "iconURL" : "icons/copymanga.png",
       "id" : "copymanga",
       "imageRequestHeaders" : {
         "Referer" : "https://www.mangacopy.com/",
@@ -440,7 +443,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "LhKsvHk2ji9gmwWbjWxtCXI/6VYKDGOGLf4JFwAOwtsJso+ltKHxXUBMXn8z6Az0kHzgYrXnsLh7oKgU3QxuCw=="
+        "value" : "sj67CbqL7ZSIiL2XeVaHb7Est0HI531YKS0NFL3R6JrRBjmoOFJRz68okKvZyHxYsnrbrfD613HlFzypt958CA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
       "version" : "1.1.2"
@@ -603,6 +606,7 @@
           "title" : "悬赏"
         }
       ],
+      "iconURL" : "icons/ehentai.png",
       "id" : "ehentai",
       "imageRequestHeaders" : {
         "Referer" : "https://e-hentai.org/",
@@ -663,7 +667,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "3ENYHNtZCap5uGVYhLp+BB+CA9tqD3NkKq4dL7K+MmG6qIXFbwr2S3lzRBcM3Oa8Br7qTVVdVX9hgNSXUqFdCA=="
+        "value" : "LYjnz5hBsnmhNJiGFN033frVc8cCiNNXnlaLMdfuBHcRNmkGEsuoAcZrXjQc7aNZ3IfuUHhzl8aVgqSZg4+1DA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
       "version" : "1.5.3"
@@ -762,6 +766,7 @@
           "title" : "账户资料"
         }
       ],
+      "iconURL" : "icons/mangabz.png",
       "id" : "mangabz",
       "imageRequestHeaders" : {
         "Referer" : "https://www.mangabz.com/",
@@ -827,7 +832,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "MiDJFqVscumUvhjCHjlHm6MfyaVpBRtkYmSHmuqZx6a2Fp7u1mnk/wH/6WQHdub36P1Wpj55+/rGB9I+VusyBQ=="
+        "value" : "JlEB3HTkWFKPd8KviwRtZ2k1wlAfWOluLlm6lyzfQlGqtfHhDzEA+/lE1XnlPF08SyaU/h/zLfWiO2jMyTaZDg=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
       "version" : "1.1.2"
@@ -993,6 +998,7 @@
           "title" : "安全登录与漫画收藏"
         }
       ],
+      "iconURL" : "icons/jmcomic.png",
       "id" : "jmcomic",
       "imageRequestHeaders" : {
         "Referer" : "https://18comic.vip/",
@@ -1014,7 +1020,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "cDmzkX8szHD3xC8RDPE5uNXGc2LxeRvw0X8p2UeuiLJ9W9cE6ZFBCqXZsJFoN6obKagRVAVQC+xhg3xQ0gscAg=="
+        "value" : "LGFBTpLflt53UqVnZGONojANj2vQHsjWuZrSuN5+WRVR8+CMlAt61H3i91UUayFJGC0xnepZrPkovGw5RYzfDA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
       "version" : "1.4.20"
@@ -1083,6 +1089,7 @@
           "title" : "Kindle 与 KOOBONE 官网推送"
         }
       ],
+      "iconURL" : "icons/kmoe.png",
       "id" : "kmoe",
       "imageRequestHeaders" : {
         "Referer" : "https://kzo.moe/"
@@ -1102,7 +1109,7 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "1ANHfX9B2yj0O9oPE0hMOpH37cKVeMYEPYJ+UVWAjLj2dwVL4wBFY0XZ6InZddXIzpRUxdoUmBextnag9gIaAQ=="
+        "value" : "MUjmV6oPEk+VW89YTwo/rIh+oMKN+QmyBVJc68vo1ahn0O3BrwiduD+TT+FuYLTCy23kiJ5MoYrUP3tTfXCKCA=="
       },
       "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/kmoe/source.js",
       "version" : "1.2.9"
