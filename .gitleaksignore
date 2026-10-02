@@ -1,0 +1,4 @@
+# JMComic's published client constants (request signing / response decryption).
+# Every JMComic client ships the same values; they are not account or signing secrets.
+841ce1b684f78de9d993259c9484d3e5a4da6ced:index.json:generic-api-key:701
+841ce1b684f78de9d993259c9484d3e5a4da6ced:sources/jmcomic/source.js:generic-api-key:6
