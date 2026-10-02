@@ -1,5 +1,5 @@
 {
-  "name" : "ComicReader Sources",
+  "name" : "Kaku Sources",
   "sources" : [
     {
       "allowedHosts" : [
@@ -162,17 +162,17 @@
           "title" : "站点线路"
         }
       ],
-      "publisher" : "ComicReader Sources Contributors",
-      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "publisher" : "Kaku Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/Kaku-Sources",
       "scriptURL" : "sources/wnacg/source.js",
       "sha256" : "d330eefa25f267d371358e4187492361d435274fe8b6586a736e3087914faef0",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "wY8+LdDeODmonyTKFwQX9UJ2oNxw2j6lYgR1K5udsR3dDvKhH+oNO20+0zG/r6gGXhT7+ElSMd4U8ChvB4ijBQ=="
+        "value" : "CQmF1W+ryWYgxOfXJRS5/3Xbo4wt9MYRe+e5uENbu0MNly2CN6xeDMnKSTYnTTiJNZaoBJDiIWEDOUhQKwfZBQ=="
       },
-      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/wnacg/source.js",
-      "version" : "1.1.2"
+      "sourceCodeURL" : "https://github.com/jinjideweima/Kaku-Sources/blob/main/sources/wnacg/source.js",
+      "version" : "1.1.3"
     },
     {
       "allowedHosts" : [
@@ -311,17 +311,17 @@
           "title" : "内容语言"
         }
       ],
-      "publisher" : "ComicReader Sources Contributors",
-      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "publisher" : "Kaku Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/Kaku-Sources",
       "scriptURL" : "sources/baozi/source.js",
       "sha256" : "021b3357b1e333d60afc3f866e249c09910c49d8bb23ff9cca64f2b5052754fb",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "QGu5KcFqG57/BsZn7SSzZyfhXDWUgJKicWvEaEF2pPC2gOv9kUp47F7bJ1M/H9Cnj7Jh/6UM1Et4ujbNX6yuBw=="
+        "value" : "huoJm6cMetlMJ1Sa18K4lJjIubAuGJbQX8orNX4t4W+eUn9WoSAgiTe1qmi2bftZsegIYf5PGmlH1xB5cxN1CQ=="
       },
-      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/baozi/source.js",
-      "version" : "1.1.3"
+      "sourceCodeURL" : "https://github.com/jinjideweima/Kaku-Sources/blob/main/sources/baozi/source.js",
+      "version" : "1.1.4"
     },
     {
       "allowedHosts" : [
@@ -436,17 +436,17 @@
         "persistentPreferences",
         "accountAuthentication"
       ],
-      "publisher" : "ComicReader Sources Contributors",
-      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "publisher" : "Kaku Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/Kaku-Sources",
       "scriptURL" : "sources/copymanga/source.js",
       "sha256" : "fed6ae830e110ff869aee27d430c357d7015138189ff82b3536526e4204bc355",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "5ZESHFTn57sSuEm0ZFcrvlLcdwuO4Cv0ss/zn+jF1bpxqO93qHSz2CMq/SOirK3n4yU8WyRDWD3+wEJLCMqQAQ=="
+        "value" : "TAk2Nrk1x+OhaNPbqdpVDu/aJ+JAJC8ztM2MtEmP+DY7aLhFTlPM2Uy6IhWZBBdkSF7S2x+M0OjxdOSZ5CctBA=="
       },
-      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/copymanga/source.js",
-      "version" : "1.1.2"
+      "sourceCodeURL" : "https://github.com/jinjideweima/Kaku-Sources/blob/main/sources/copymanga/source.js",
+      "version" : "1.1.3"
     },
     {
       "allowedHosts" : [
@@ -644,8 +644,8 @@
           "title" : "访问站点"
         }
       ],
-      "publisher" : "ComicReader Sources Contributors",
-      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "publisher" : "Kaku Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/Kaku-Sources",
       "resources" : [
         {
           "id" : "tag-names.zh-CN.json",
@@ -667,10 +667,10 @@
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "nNjr+M3VcXkrxbSvAroAAGkNzYt55tGILzCaOYW4KwJqxZY/7CzbaD95NV6y25Juk4DkuY+ilbflS8DldjVcCA=="
+        "value" : "v/RmtqrMvm5jImZLcueV2r/XfFv09hlqXQPE8/pNhgfSfKl5oj8CAIPSkEJC1tuEH8Q42+eKhYpJRLj65NU9DQ=="
       },
-      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/ehentai/source.js",
-      "version" : "1.5.3"
+      "sourceCodeURL" : "https://github.com/jinjideweima/Kaku-Sources/blob/main/sources/ehentai/source.js",
+      "version" : "1.5.4"
     },
     {
       "allowedHosts" : [
@@ -825,17 +825,17 @@
           "title" : "访问线路"
         }
       ],
-      "publisher" : "ComicReader Sources Contributors",
-      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "publisher" : "Kaku Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/Kaku-Sources",
       "scriptURL" : "sources/mangabz/source.js",
       "sha256" : "29b9f915ea1f75a1657e8233febfd64d4de11f3cf39f8b2aafded84c22a0414b",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "w4/sOit/ljd1axIFsnuTmj713e2XsYYakxfQGJldbECTpyKxvRMTsY9pVUAJdcbJv3pmtOQuu6mNvDDQ7byjCg=="
+        "value" : "CcFS+cO2CouCnRCClmvmJdLrfqoDle1GwpHb4EI/uBbtc7J6CLpf8cty1m8zf/1P2E5fQuLtIuaTJbDFqm6OCg=="
       },
-      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/mangabz/source.js",
-      "version" : "1.1.2"
+      "sourceCodeURL" : "https://github.com/jinjideweima/Kaku-Sources/blob/main/sources/mangabz/source.js",
+      "version" : "1.1.3"
     },
     {
       "allowedHosts" : [
@@ -1013,17 +1013,17 @@
         "accountAuthentication",
         "accountCookies"
       ],
-      "publisher" : "ComicReader Sources Contributors",
-      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "publisher" : "Kaku Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/Kaku-Sources",
       "scriptURL" : "sources/jmcomic/source.js",
       "sha256" : "3ddfedaa12199b076e510b7732102287c8547fa992eaa83f7b9ff18c527c3a01",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "7AvCbu9pSFLL31yT47LmyZcTDixb5cEcAjap4EQbhsEldnRFNviKb7JkbnO0TzmBO7ds1tzvOnT5AeLc/i5cBg=="
+        "value" : "rVkW/+ioeKHRk+OFES0C0V0uC3FXeg/62LeRbMSrnpeYsP+9H/IKPUtClhGsmM6I0ZC2hdJA+VZ7rDcFQ3PdBA=="
       },
-      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/jmcomic/source.js",
-      "version" : "1.4.20"
+      "sourceCodeURL" : "https://github.com/jinjideweima/Kaku-Sources/blob/main/sources/jmcomic/source.js",
+      "version" : "1.4.21"
     },
     {
       "allowedHosts" : [
@@ -1102,17 +1102,18 @@
         "accountAuthentication",
         "accountCookies"
       ],
-      "publisher" : "ComicReader Sources Contributors",
-      "publisherURL" : "https://github.com/jinjideweima/ComicReader-Sources",
+      "publisher" : "Kaku Sources Contributors",
+      "publisherURL" : "https://github.com/jinjideweima/Kaku-Sources",
       "scriptURL" : "sources/kmoe/source.js",
       "sha256" : "cdcc2f4ccab3bcc9bc47dcc1f81c342d3dfbd2faf782d8c9c75b0f6213f3f2b7",
       "signature" : {
         "algorithm" : "ed25519-v2",
         "publicKey" : "8dyJLmVAzYTiq+8IyZSJ1dCKFZG2L0AtA0IvCrySWpI=",
-        "value" : "iVaOvh2KYKXlbEm7hEeqhaYBqCxlfe0zyO/88E+IkEGEfZUBH6QQRO8Wpn7ye5elKrbamrToFOwVPxYnMw1eBQ=="
+        "value" : "pMhbGPb5ZWvTsNPOfaJianuzpKSkbsC9pw+IJotlLL4JhWEEjpzl2cq7+xB/Xez1tOJPWHxHcLOQ+B51HPeeDQ=="
       },
-      "sourceCodeURL" : "https://github.com/jinjideweima/ComicReader-Sources/blob/main/sources/kmoe/source.js",
-      "version" : "1.2.9"
+      "sourceCodeURL" : "https://github.com/jinjideweima/Kaku-Sources/blob/main/sources/kmoe/source.js",
+      "version" : "1.2.10"
     }
-  ]
+  ],
+  "url" : "https://raw.githubusercontent.com/jinjideweima/Kaku-Sources/main/index.json"
 }

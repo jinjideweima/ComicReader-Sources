@@ -1,3 +1,8 @@
+## Kaku Sources — 2026-10-02
+
+- The repository is now Kaku Sources (formerly ComicReader Sources), matching the app's new name. The GitHub repository moved to `jinjideweima/Kaku-Sources`; `index.json` declares its new address in `url`, and Kaku updates saved repositories to it.
+- Publisher, publisher URL, and source-code URLs updated; every source gets a patch version so installed copies pick up the new metadata. No script changes.
+
 ## Kmoe 1.2.4 — 2026-09-12
 
 - Restore anonymous catalogue, pagination, and search through the official public data_list.php endpoint when desktop content routes redirect to Google.
